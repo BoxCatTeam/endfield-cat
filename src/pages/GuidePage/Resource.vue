@@ -3,10 +3,10 @@ import { ref, computed, onUnmounted, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '../../stores/app'
 import { Snackbar } from '@varlet/ui'
-import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { useI18n } from 'vue-i18n'
 import type { MetadataSourceType } from '../../stores/app'
+import { fetchMetadataManifest, resetMetadata as resetMetadataCommand } from '../../api/tauriCommands'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -23,7 +23,7 @@ const metadataValid = computed(() => {
   return s && s.hasManifest && !s.isEmpty
 })
 
-// Progress Event Payload
+// 进度事件负载
 type DownloadProgress = {
   current: number;
   total: number;
@@ -60,7 +60,7 @@ const testSourceConnection = async (source: MetadataSourceType) => {
   connectivity.value[source] = { status: 'testing', latency: 0, error: '' }
   const start = performance.now()
   try {
-    await invoke('fetch_metadata_manifest', {
+    await fetchMetadataManifest({
       baseUrl,
       version: appStore.metadataVersion
     })
@@ -81,13 +81,17 @@ const testSourceConnection = async (source: MetadataSourceType) => {
 
 const testAllConnections = async () => {
   for (const s of ['cdn', 'mirror', 'custom'] as const) {
-    // Run sequentially to reduce simultaneous outbound requests
+    // 顺序测试以减少并发请求
     // eslint-disable-next-line no-await-in-loop
     await testSourceConnection(s)
   }
 }
 
 const selectSource = async (source: MetadataSourceType) => {
+  if (source === 'custom') {
+    Snackbar.info(t('settings.messages.devPlaceholder'))
+    return
+  }
   appStore.metadataSourceType = source
   await testSourceConnection(source)
 }
@@ -98,12 +102,12 @@ const checkMetadataState = async () => {
   try {
     await appStore.checkMetadata()
     if (metadataValid.value) {
-       // Using small delay to show the check happening
+       // 加一点延时便于显示检测过程
       setTimeout(() => {
          router.push('/guide/ready')
       }, 800)
     } else {
-      // If not valid, auto-test connectivity to current source
+      // 无效则自动测试当前源连通性
       testAllConnections()
     }
   } finally {
@@ -118,7 +122,7 @@ const initializeMetadata = async () => {
   progressText.value = t('guide.preparing')
   
   try {
-    // Setup listener
+    // 监听下载进度
     unlisten = await listen<DownloadProgress>('metadata-progress', (event) => {
       const p = event.payload
       if (p.total > 0) {
@@ -131,7 +135,7 @@ const initializeMetadata = async () => {
       }
     })
 
-    await invoke('reset_metadata', {
+    await resetMetadataCommand({
       baseUrl: appStore.metadataBaseUrl,
       version: appStore.metadataVersion
     })
@@ -174,14 +178,14 @@ onUnmounted(() => {
     </var-space>
 
     <div class="resource-body">
-      <!-- Loading / Checking State -->
+      <!-- 加载/检查状态 -->
       <div v-if="loading || checking" class="state-loading">
         <var-loading type="wave" size="large" color="var(--color-primary)" />
         <p class="status-text-large">{{ progressText }}</p>
         <var-progress v-if="loading" :value="progress" class="download-progress" track-color="rgba(0,0,0,0.1)" />
       </div>
 
-      <!-- Main Selection State -->
+      <!-- 主选择区 -->
       <div v-else class="source-selection">
         <var-space :size="12" class="alert-box warning" align="start">
            <var-icon name="alert-circle-outline" style="margin-top: 2px;" />
@@ -198,24 +202,24 @@ onUnmounted(() => {
             v-for="src in (['cdn', 'mirror', 'custom'] as const)"
             :key="src"
             class="source-option"
-            :class="{ active: appStore.metadataSourceType === src }"
+            :class="{ active: appStore.metadataSourceType === src, disabled: src === 'custom' }"
             v-ripple
             @click="selectSource(src)"
           >
-            <!-- 1. Checkbox (Left) -->
+            <!-- 1. 左侧复选框 -->
             <div class="source-check">
               <var-checkbox :model-value="appStore.metadataSourceType === src" readonly />
             </div>
 
             <var-space justify="space-between" class="source-item">
-              <!-- 2. Source Name -->
+              <!-- 2. 数据源名称 -->
               <div class="source-name">
                 <span v-if="src === 'cdn'">{{ t('settings.metadata.sourceCdn') }}</span>
                 <span v-else-if="src === 'mirror'">{{ t('settings.metadata.sourceMirror') }}</span>
                 <span v-else>{{ t('settings.metadata.sourceCustom') }}</span>
               </div>
 
-              <!-- 3. Connectivity Status (Right) -->
+              <!-- 3. 右侧连通性状态 -->
               <div class="source-status">
               <span v-if="connectivity[src].status === 'testing'" class="status-badge testing">
                   <var-loading type="cube" size="small" :radius="2" class="inline-loading" />
@@ -232,7 +236,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Custom Input Area (Below list) -->
+        <!-- 自定义地址输入区 -->
         <transition name="expand">
           <div v-if="appStore.metadataSourceType === 'custom'" class="custom-input-box">
              <div class="input-label">{{ t('settings.metadata.sourceCustom') }}:</div>
@@ -272,7 +276,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* Glass Panel Base */
+/* 玻璃质感基础样式 */
 .glass-panel {
   background: rgba(255, 255, 255, 0.65);
   backdrop-filter: blur(24px);
@@ -412,11 +416,16 @@ onUnmounted(() => {
   background: rgba(var(--hsl-primary), 0.05);
 }
 
+.source-option.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .source-check {
   margin-right: 12px;
   display: flex;
   align-items: center;
-  pointer-events: none; /* Let the row click handle it */
+  pointer-events: none; /* 点击事件交给整行处理 */
 }
 
 .source-name {

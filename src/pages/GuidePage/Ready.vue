@@ -39,7 +39,7 @@ const finishSetup = async () => {
 </template>
 
 <style scoped>
-/* Glass Panel Base */
+/* 玻璃质感基础样式 */
 .glass-panel {
   background: rgba(255, 255, 255, 0.65);
   backdrop-filter: blur(24px);

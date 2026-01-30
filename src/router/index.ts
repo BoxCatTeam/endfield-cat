@@ -1,11 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 
-// import MainPage from "../pages/MainPage.vue";
-// import HomePage from "../pages/HomePage.vue";
-// import LauncherPage from "../pages/LauncherPage.vue";
-// import GachaPage from "../pages/GachaPage.vue";
-// import SettingsPage from "../pages/SettingsPage.vue";
-
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [

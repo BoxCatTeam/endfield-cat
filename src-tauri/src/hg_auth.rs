@@ -5,6 +5,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use reqwest::header;
 
+macro_rules! log_dev {
+    ($($arg:tt)*) => {
+        if cfg!(debug_assertions) {
+            println!($($arg)*);
+        }
+    };
+}
+
 const HG_LOGIN_URL: &str = "https://user.hypergryph.com/";
 const HG_TOKEN_URL: &str = "https://web-api.hypergryph.com/account/info/hg";
 const ENDCAT_SCHEME: &str = "endcat";
@@ -13,7 +21,7 @@ const AUTH_UA: &str =
 
 fn clear_hg_webview(win: &WebviewWindow) {
     if let Err(e) = win.clear_all_browsing_data() {
-        println!("[hg-auth] clear_all_browsing_data failed: {e}");
+        log_dev!("[hg-auth] clear_all_browsing_data failed: {e}");
     }
     let _ = win.eval(
         "try { localStorage.clear?.(); sessionStorage.clear?.(); if (window.indexedDB?.databases) { indexedDB.databases().then(dbs => dbs.forEach(db => indexedDB.deleteDatabase(db.name))).catch(() => {}); } } catch (_) {}",
@@ -89,17 +97,17 @@ fn maybe_set_disable_gpu() {
             .map(|v| v.contains("--disable-gpu"))
             .unwrap_or(false)
         {
-            println!("[hg-auth] clearing WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS (contained --disable-gpu)");
+            log_dev!("[hg-auth] clearing WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS (contained --disable-gpu)");
             env::remove_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS");
         } else {
-            println!("[hg-auth] WEBVIEW2 disable-gpu not forced (set ENDCAT_FORCE_WEBVIEW_DISABLE_GPU=1 to enable)");
+            log_dev!("[hg-auth] WEBVIEW2 disable-gpu not forced (set ENDCAT_FORCE_WEBVIEW_DISABLE_GPU=1 to enable)");
         }
         return;
     }
 
     let args = env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").unwrap_or_default();
     if args.contains("--disable-gpu") {
-        println!("[hg-auth] WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS already has --disable-gpu");
+        log_dev!("[hg-auth] WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS already has --disable-gpu");
         return;
     }
 
@@ -109,14 +117,14 @@ fn maybe_set_disable_gpu() {
         format!("{args} --disable-gpu")
     };
     env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", &merged);
-    println!("[hg-auth] set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS={}", merged);
+    log_dev!("[hg-auth] set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS={}", merged);
 }
 
 #[cfg(not(target_os = "windows"))]
 fn maybe_set_disable_gpu() {}
 
 async fn fetch_token_with_cookie(cookie_header: String) -> Option<String> {
-    println!(
+    log_dev!(
         "[hg-auth] fetch_token_with_cookie: len={} preview={}",
         cookie_header.len(),
         cookie_header
@@ -139,7 +147,7 @@ async fn fetch_token_with_cookie(cookie_header: String) -> Option<String> {
         .ok()?;
 
     if !res.status().is_success() {
-        println!("[hg-auth] token fetch failed status {}", res.status());
+        log_dev!("[hg-auth] token fetch failed status {}", res.status());
         return None;
     }
 
@@ -162,7 +170,7 @@ async fn fetch_token_with_cookie(cookie_header: String) -> Option<String> {
         })
         .or_else(|| json.get("content").and_then(|v| v.as_str()).map(|s| s.to_string()));
     if token.as_deref().unwrap_or("").is_empty() {
-        println!("[hg-auth] token fetch json missing token: {:?}", json);
+        log_dev!("[hg-auth] token fetch json missing token: {:?}", json);
     }
     token
 }
@@ -182,9 +190,11 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("hg-auth") {
         let _ = win.show();
         let _ = win.set_focus();
-        let _ = win.eval(
-            "try { window.__TAURI_INTERNALS__?.invoke?.('plugin:webview|internal_toggle_devtools'); } catch (_) {}",
-        );
+        if cfg!(debug_assertions) {
+            let _ = win.eval(
+                "try { window.__TAURI_INTERNALS__?.invoke?.('plugin:webview|internal_toggle_devtools'); } catch (_) {}",
+            );
+        }
         return Ok(());
     }
 
@@ -194,7 +204,7 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
     let login_url_str = login_url.to_string();
     let app_for_nav = app.clone();
 
-    println!(
+    log_dev!(
         "[hg-auth] building webview: target={}, gpu_flag={:?}",
         login_url_str,
         std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").ok()
@@ -228,7 +238,7 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
             let log_now = now_millis();
             if log_now.saturating_sub(LAST_REQ_LOG_MS.load(Ordering::Relaxed)) > 1500 {
                 LAST_REQ_LOG_MS.store(log_now, Ordering::Relaxed);
-                println!("[hg-auth] web_request {}{}", host, path);
+                log_dev!("[hg-auth] web_request {}{}", host, path);
             }
 
             // Throttle to avoid hammering.
@@ -238,7 +248,7 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
                 let last_nav = LAST_USERINFO_NAV_MS.load(Ordering::Relaxed);
                 if now.saturating_sub(last_nav) > 1200 {
                     LAST_USERINFO_NAV_MS.store(now, Ordering::Relaxed);
-                    println!("[hg-auth] detected userInfo navigation, forcing token URL");
+                    log_dev!("[hg-auth] detected userInfo navigation, forcing token URL");
                     if let Some(win) = app_for_req.get_webview_window("hg-auth") {
                         let _ = win.eval("try { location.href = 'https://web-api.hypergryph.com/account/info/hg'; } catch (_) {}");
                     }
@@ -262,13 +272,13 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
 
             if cookies_combined.trim().is_empty() {
                 if is_token_req {
-                    println!("[hg-auth] token request observed but cookie header empty");
+                    log_dev!("[hg-auth] token request observed but cookie header empty");
                 }
                 return;
             }
 
             LAST_COOKIE_FETCH_MS.store(now, Ordering::Relaxed);
-            println!(
+            log_dev!(
                 "[hg-auth] on_web_resource_request cookies from {}{} len={} (token_req={})",
                 host,
                 path,
@@ -287,7 +297,7 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
             });
         })
         .on_navigation(move |url| {
-            println!("[hg-auth] navigating {}", url);
+            log_dev!("[hg-auth] navigating {}", url);
             if url.scheme() != ENDCAT_SCHEME {
                 return true;
             }
@@ -346,18 +356,18 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
         .on_page_load(move |window, payload| {
             let url = payload.url();
             let url_str = url.as_str();
-            println!("[hg-auth] page loaded {}", url_str);
+            log_dev!("[hg-auth] page loaded {}", url_str);
             let _ = window.eval("window.__ENDCAT_PAGE_LOADED__ = true;");
         });
 
-    // Keep devtools available to inspect blank screens during auth flow.
-    builder = builder.devtools(true);
+    // 仅在开发环境开启 devtools
+    builder = builder.devtools(cfg!(debug_assertions));
 
     let win = builder.build().map_err(|e| e.to_string())?;
 
     match win.navigate(login_url) {
-        Ok(()) => println!("[hg-auth] navigate() issued to {}", login_url_str),
-        Err(err) => println!("[hg-auth] navigate() failed to {}: {}", login_url_str, err),
+        Ok(()) => log_dev!("[hg-auth] navigate() issued to {}", login_url_str),
+        Err(err) => log_dev!("[hg-auth] navigate() failed to {}: {}", login_url_str, err),
     }
 
     // Fallback: if stuck on about:blank, navigate to login page
@@ -368,8 +378,10 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
         "setInterval(() => { try { console.log('[hg-auth] heartbeat', location.href, document.readyState); } catch (_) {} }, 3000);",
     );
 
-    // Open devtools for debugging if needed
-    win.open_devtools();
+    // 开发环境下自动打开 devtools
+    if cfg!(debug_assertions) {
+        win.open_devtools();
+    }
 
     Ok(())
 }
@@ -379,7 +391,7 @@ pub async fn hg_open_token_webview(app: AppHandle) -> Result<(), String> {
     let handle = app.clone();
     app.run_on_main_thread(move || {
         if let Err(e) = open_hg_auth_window(&handle) {
-            println!("[hg-auth] open window failed: {e}");
+            log_dev!("[hg-auth] open window failed: {e}");
         }
     })
     .map_err(|e| e.to_string())
@@ -403,7 +415,7 @@ pub async fn hg_push_cookies(app: AppHandle, cookie: String) -> Result<(), Strin
     if cookie.trim().is_empty() {
         return Err("cookie is empty".into());
     }
-    println!("[hg-auth] hg_push_cookies len={}", cookie.len());
+    log_dev!("[hg-auth] hg_push_cookies len={}", cookie.len());
     let app_for_fetch = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Some(token) = fetch_token_with_cookie(cookie).await {

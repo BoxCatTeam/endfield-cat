@@ -3,6 +3,14 @@ use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite, Row};
 // std::collections imported inline where needed
 use tauri::{State, AppHandle};
 
+macro_rules! log_dev {
+    ($($arg:tt)*) => {
+        if cfg!(debug_assertions) {
+            println!($($arg)*);
+        }
+    };
+}
+
 use std::fs;
 
 pub type DbPool = Pool<Sqlite>;
@@ -30,7 +38,7 @@ pub async fn init_db(_app: &AppHandle) -> Result<DbPool, Box<dyn std::error::Err
     if !db_path.exists() {
         let old_db_path = old_user_data_dir.join("endcat.db");
         if old_db_path.exists() {
-            println!("[database] Migrating DB from {:?} to {:?}", old_db_path, db_path);
+            log_dev!("[database] Migrating DB from {:?} to {:?}", old_db_path, db_path);
             let _ = fs::rename(&old_db_path, &db_path);
             // Optional: remove empty userData dir
         }
@@ -38,7 +46,7 @@ pub async fn init_db(_app: &AppHandle) -> Result<DbPool, Box<dyn std::error::Err
 
     let db_path_str = db_path.to_str().ok_or("Invalid db path")?;
     
-    println!("[database] Opening DB at: {}", db_path_str);
+    log_dev!("[database] Opening DB at: {}", db_path_str);
     
     let database_url = format!("sqlite:{}?mode=rwc", db_path_str);
     

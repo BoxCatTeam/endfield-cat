@@ -6,11 +6,11 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// Configuration
+// 常量配置
 const SIDEBAR_EXPANDED_WIDTH = 230;
 const CONTENT_MIN_WIDTH = 720; 
 
-const COLLAPSE_THRESHOLD = CONTENT_MIN_WIDTH + SIDEBAR_EXPANDED_WIDTH; // ~1110px
+const COLLAPSE_THRESHOLD = CONTENT_MIN_WIDTH + SIDEBAR_EXPANDED_WIDTH; // 约 1110px
 
 const windowWidth = ref(window.innerWidth);
 const isCollapsed = computed(() => windowWidth.value < COLLAPSE_THRESHOLD);
@@ -22,10 +22,10 @@ function onResize() {
 onMounted(async () => {
   window.addEventListener("resize", onResize);
   
-  // Enforce min window size
+  // 限制窗口最小尺寸
   try {
     const appWindow = getCurrentWindow();
-    // Using LogicalSize for consistency with CSS pixels
+    // 使用 LogicalSize 与 CSS 像素保持一致
     await appWindow.setMinSize(new LogicalSize(675, 475));
   } catch (e) {
     console.error("Failed to set min window size", e);
@@ -135,10 +135,10 @@ onBeforeUnmount(() => {
   transition: opacity 0.2s;
 }
 
-/* Ensure icons are centered in collapsed mode */
+/* 折叠状态下让图标水平居中 */
 .sidebar.collapsed :deep(.var-cell__content) {
   justify-content: center;
-  flex: 0 0 auto; /* Prevent content from growing */
+  flex: 0 0 auto; /* 防止内容被拉伸 */
 }
 
 .sidebar.collapsed :deep(.var-cell) {
@@ -147,7 +147,7 @@ onBeforeUnmount(() => {
   justify-content: center;
 }
 
-/* Fix icon margin when using slots might need check */
+/* 槽位下移除图标左右边距 */
 .sidebar.collapsed :deep(.var-cell__icon) {
   margin-right: 0 !important;
   width: 100%;
@@ -211,29 +211,7 @@ onBeforeUnmount(() => {
   border-left: 1px solid var(--color-content-border);
   border-radius: 16px 0 0 0;
   margin: 0;
-  overflow: hidden; /* Changed from auto to hidden because scroll is on page level now? No, wait. */
-  /* GachaPage has overflow-y: auto. But .content needs to be the container? */
-  /* If GachaPage has height: 100%, content must have height 100% or flex: 1. */
-  /* If content has border radius + overflow hidden, internal scrolling works if child has height 100%. */
-  /* Let's keep overflow auto here IF GachaPage assumes it's in a scroll container, 
-     BUT GachaPage sets ITS OWN overflow-y: auto. 
-     If GachaPage handles scrolling, .content shouldn't scroll? 
-     Or GachaPage is just a child div. If GachaPage grows, then .content must scroll.
-     Previous css had .content { overflow: auto }. 
-     Let's keep it overflow: hidden (to clip radius) but make sure GachaPage height works.
-     Actually, if GachaPage has overflow-y: auto, .content needs to constrain height.
-     If .content is flex: 1 in flex column/row, it has height.
-     So content should likely be `display: flex; flex-direction: column; overflow: hidden;`
-     and allow router-view to take space?
-     Or just let .content be the scroll container?
-     GachaPage set its own overflow. So let's make .content `overflow: hidden` to clip corners,
-     and rely on GachaPage to scroll.
-     Wait, if .content is hidden, GachaPage must be smaller than content? No.
-     If GachaPage is `height: 100%`, it matches content height.
-     If content height is fixed (via flex), GachaPage fits. 
-     If GachaPage overflows, GachaPage's scrollbar handles it.
-     So `overflow: hidden` on .content is correct for clipping.
-  */
+  /* 内容区域不滚动，交由子页面自行处理，保持圆角裁切 */
   overflow: hidden;
 }
 

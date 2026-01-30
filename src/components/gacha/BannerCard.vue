@@ -23,7 +23,7 @@ export type BannerItem = {
   min6: number;
   max6: number;
   top: Array<{ name: string; count: number; rarity: 6 | 5 | 4 | 3; icon?: string }>;
-  total?: number; // total is computed in parent usually, or we compute it if missing
+  total?: number; // 总数若未传入则在组件内计算
 };
 
 const props = defineProps<{
@@ -186,10 +186,10 @@ const total = computed(() => {
 }
 
 .top-list {
-  /* display: flex replaced by var-space */
+  /* 使用 var-space 代替 display:flex */
   overflow-x: hidden;
   height: 100%;
-  /* align-content: start; - not needed for block flow driven by var-space */
+  /* var-space 已处理布局，这里无需 align-content */
   scrollbar-width: thin;
   scrollbar-color: var(--color-scrollbar-thumb) transparent;
   padding: 5px;

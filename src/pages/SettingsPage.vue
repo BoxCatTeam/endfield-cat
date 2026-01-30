@@ -1,26 +1,29 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { openUrl } from '@tauri-apps/plugin-opener'
-import { invoke } from '@tauri-apps/api/core'
 import { Snackbar } from '@varlet/ui'
 import { useI18n } from 'vue-i18n'
 import logo from '../assets/icon.webp'
 import { useAppStore } from '../stores/app'
+import { useUpdaterStore } from '../stores/updater'
 import type { MetadataSourceType } from '../stores/app'
+import { fetchMetadataManifest, getAppVersion, resetMetadata as resetMetadataCommand } from '../api/tauriCommands'
 
 const { t, tm } = useI18n()
 const disclaimerItems = computed(() => tm('common.disclaimer.items') as string[])
 const appStore = useAppStore()
+const updaterStore = useUpdaterStore()
 
-// Mock Data
+// 展示所需的本地状态
 const appVersion = ref('')
-const latestVersion = ref('')
-const latestReleaseUrl = ref('')
-const checkingUpdate = ref(false)
+const latestVersion = computed(() => updaterStore.updateInfo?.tag_name ? normalizeVersion(updaterStore.updateInfo.tag_name) : '')
+const latestReleaseUrl = computed(() => updaterStore.updateInfo?.html_url || '')
+const checkingUpdate = computed(() => updaterStore.isChecking)
 
 onMounted(async () => {
   try {
-    appVersion.value = await invoke<string>('get_app_version')
+    appVersion.value = await getAppVersion()
+    // 首次进入时静默拉取最新版本信息，保持“当前/最新”展示可用
   } catch (error) {
     console.error('Failed to get version:', error)
     appVersion.value = 'Unknown'
@@ -29,7 +32,7 @@ onMounted(async () => {
   void testAllConnections()
 })
 
-// Bind to store
+// 与 store 双向绑定
 const theme = computed({
   get: () => appStore.theme,
   set: (val) => appStore.theme = val
@@ -92,7 +95,7 @@ const testSourceConnection = async (source: MetadataSourceType) => {
   connectivity.value[source] = { status: 'testing', latency: 0, error: '' }
   const start = performance.now()
   try {
-    await invoke('fetch_metadata_manifest', {
+    await fetchMetadataManifest({
       baseUrl,
       version: metadataVersion.value
     })
@@ -119,52 +122,20 @@ const testAllConnections = async () => {
 }
 
 const selectSource = async (source: MetadataSourceType) => {
+  if (source === 'custom') {
+    Snackbar.info(t('settings.messages.devPlaceholder'))
+    return
+  }
   metadataSourceType.value = source
   await testSourceConnection(source)
 }
 
 const gamePath = ref('')
 
-// Mock Functions
 const normalizeVersion = (v: string) => v.replace(/^v/i, '').trim()
 
-const compareVersion = (a: string, b: string) => {
-  const pa = normalizeVersion(a).split(/[.-]/).map((n) => parseInt(n, 10) || 0)
-  const pb = normalizeVersion(b).split(/[.-]/).map((n) => parseInt(n, 10) || 0)
-  const len = Math.max(pa.length, pb.length)
-  for (let i = 0; i < len; i++) {
-    const diff = (pa[i] || 0) - (pb[i] || 0)
-    if (diff !== 0) return Math.sign(diff)
-  }
-  return 0
-}
-
 const checkUpdate = async () => {
-  checkingUpdate.value = true
-  try {
-    const release = await invoke<{ tag_name?: string; name?: string; html_url?: string }>('fetch_latest_release')
-    const tag = release.tag_name || release.name || ''
-    const latest = normalizeVersion(tag)
-    latestVersion.value = latest
-    latestReleaseUrl.value = release.html_url || ''
-
-    if (!latest || !appVersion.value) {
-      Snackbar.info(t('settings.update.latestUnknown'))
-      return
-    }
-
-    const cmp = compareVersion(latest, appVersion.value)
-    if (cmp > 0) {
-      Snackbar.success(t('settings.update.found', { version: latest }))
-    } else {
-      Snackbar.success(t('settings.update.upToDate'))
-    }
-  } catch (error) {
-    console.error('Failed to check update:', error)
-    Snackbar.error(`${t('settings.update.failed')}: ${error}`)
-  } finally {
-    checkingUpdate.value = false
-  }
+   await updaterStore.checkForUpdate(false)
 }
 
 const openLatestRelease = async () => {
@@ -233,7 +204,7 @@ const resetMetadataLoading = ref(false)
 const resetMetadata = async () => {
   resetMetadataLoading.value = true
   try {
-    await invoke('reset_metadata', {
+    await resetMetadataCommand({
       baseUrl: metadataBaseUrl.value,
       version: metadataVersion.value
     })
@@ -262,7 +233,15 @@ const notAvailable = () => {
           Copyright © 2026 <span class="link" @click="openUrl('https://boxcat.org')">BoxCat.</span> under <span class="link" @click="openUrl('https://opensource.org/licenses/GPL-2.0')">GPLv2 License</span>
         </div>
         <var-space class="header-buttons" justify="center" :size="8">
-          <var-button type="default" size="small" variant="text" :elevation="false" @click="openLink('settings.buttons.github')">{{ t('settings.buttons.github') }}</var-button>
+          <var-button
+              type="default"
+              size="small"
+              variant="text"
+              :elevation="false"
+              @click="openLink('settings.buttons.github')"
+          >
+            {{ t('settings.buttons.github') }}
+          </var-button>
           <var-button type="default" size="small" variant="text" :elevation="false" @click="openLink('settings.buttons.website')">{{ t('settings.buttons.website') }}</var-button>
           <var-button type="default" size="small" variant="text" :elevation="false" @click="openLink('settings.buttons.feedback')">{{ t('settings.buttons.feedback') }}</var-button>
           <var-button type="default" size="small" variant="text" :elevation="false" @click="openLink('settings.buttons.privacy')">{{ t('settings.buttons.privacy') }}</var-button>
@@ -274,8 +253,8 @@ const notAvailable = () => {
       </var-space>
 
       <var-space direction="column" size="large">
-        
-        <!-- About Section -->
+
+        <!-- 关于 -->
         <section>
           <div class="section-title">{{ t('settings.about') }}</div>
           <var-paper :elevation="false" radius="12">
@@ -308,7 +287,7 @@ const notAvailable = () => {
             </var-paper>
           </section>
 
-        <!-- Appearance Section -->
+        <!-- 外观 -->
         <section>
           <div class="section-title">{{ t('settings.appearance') }}</div>
           <var-space direction="column" size="small">
@@ -373,7 +352,7 @@ const notAvailable = () => {
           </var-space>
         </section>
 
-        <!-- Game Section -->
+        <!-- 游戏 -->
         <section>
           <div class="section-title">{{ t('settings.game') }}</div>
           <var-paper :elevation="false" radius="12">
@@ -394,7 +373,7 @@ const notAvailable = () => {
           </var-paper>
         </section>
 
-        <!-- User Data Section -->
+        <!-- 用户数据 -->
         <section>
           <div class="section-title">{{ t('settings.userData') }}</div>
           <var-paper :elevation="false" radius="12">
@@ -415,7 +394,7 @@ const notAvailable = () => {
           </var-paper>
         </section>
 
-        <!-- Metadata Section -->
+        <!-- 元数据 -->
         <section>
           <div class="section-title">{{ t('settings.metadata.title') }}</div>
           <var-space direction="column" size="small">
@@ -438,6 +417,7 @@ const notAvailable = () => {
               <var-cell
                 v-for="src in (['cdn', 'mirror', 'custom'] as const)"
                 :key="src"
+                :class="{ 'metadata-option-disabled': src === 'custom' }"
                 ripple
                 @click="selectSource(src)"
               >
@@ -466,32 +446,24 @@ const notAvailable = () => {
                     </span>
                     <span v-else class="metadata-conn-idle">--</span>
                   </div>
+                  <div
+                    v-if="src === 'custom' && metadataSourceType === 'custom'"
+                    class="metadata-inline-input"
+                    @click.stop
+                  >
+                    <div class="inline-input-label">{{ t('settings.metadata.sourceCustom') }}</div>
+                    <var-input
+                      v-model="metadataCustomBase"
+                      size="small"
+                      variant="outlined"
+                      class="metadata-input"
+                      :placeholder="t('settings.metadata.customPlaceholder')"
+                      @change="testSourceConnection('custom')"
+                    />
+                  </div>
                 </template>
                 <template #extra>
                   <var-icon v-if="metadataSourceType === src" name="check" />
-                </template>
-              </var-cell>
-            </var-paper>
-
-            <var-paper v-if="metadataSourceType === 'custom'" :elevation="false" radius="12">
-              <var-cell>
-                <template #icon>
-                  <var-icon name="link-variant" size="24px" class="section-icon" />
-                </template>
-                <template #default>
-                  <div class="cell-title">{{ t('settings.metadata.sourceCustom') }}</div>
-                </template>
-                <template #description>
-                  <div class="cell-desc">{{ t('settings.metadata.customDesc') }}</div>
-                </template>
-                <template #extra>
-                  <var-input
-                    v-model="metadataCustomBase"
-                    size="small"
-                    variant="outlined"
-                    class="metadata-input"
-                    :placeholder="t('settings.metadata.customPlaceholder')"
-                  />
                 </template>
               </var-cell>
             </var-paper>
@@ -705,11 +677,28 @@ const notAvailable = () => {
   font-weight: 600;
 }
 
+.metadata-option-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .disclaimer-block {
   padding: 14px 16px;
   font-size: 12px;
   color: var(--color-text);
   opacity: 0.85;
+}
+
+.metadata-inline-input {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inline-input-label {
+  font-size: 12px;
+  opacity: 0.75;
 }
 
 .disclaimer-list {

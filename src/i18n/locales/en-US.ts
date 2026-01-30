@@ -1,0 +1,193 @@
+export default {
+    common: {
+        appName: "EndCat",
+        notAvailable: "Not available in development",
+        clickTip: "Clicked: {label}",
+        retry: "Retry",
+        next: "Next",
+        disclaimer: {
+            title: "Disclaimer",
+            items: [
+                "This project is an unofficial tool and is not affiliated with Hypergryph or its subsidiaries/studios. All game images and data copyrights belong to their respective owners.",
+                "This software is provided 'as is', without warranty of any kind, express or implied (including but not limited to availability, stability, accuracy, or merchantability/fitness for a particular purpose); any direct or indirect loss caused by the use of this software is borne by the user.",
+                "This software is for personal learning and research use only. Commercial use, redistribution, or provision of value-added services is prohibited; liability arising from violation of these restrictions is borne by the user.",
+                "Use of this software must comply with applicable laws and regulations in your country/region, game/platform terms of service, and intellectual property requirements; if you have doubts about compliance or safety, please stop using and uninstall immediately.",
+                "This project does not collect or upload any personal privacy data. All user data and login credentials are stored locally; game data involved is imported/exported by the user's choice."
+            ]
+        }
+    },
+    guide: {
+        title: "Welcome",
+        welcomeTitle: "Welcome to EndCat",
+        welcomeSubtitle: "Your Arknights: Endfield Game Assistant",
+        welcomeIntro1: "EndCat helps you easily manage game data and records.",
+        welcomeIntro2: "Just a few simple configuration steps to get started.",
+        startSetup: "Start Setup",
+        selectLanguage: "Select Language",
+        stepWelcome: "Welcome",
+        stepDisclaimer: "Disclaimer",
+        stepResource: "Resources",
+        stepFinish: "Finish",
+        agreeAndContinue: "Agree and Continue",
+        resourceTitle: "Resource Initialization",
+        checkingEnv: "Checking environment...",
+        missingTitle: "Missing necessary metadata files",
+        missingDesc1: "EndCat needs to download approximately 3MB of data files to run properly.",
+        missingDesc2: "This usually takes just a few seconds.",
+        currentSource: "Current Source:",
+        connectivity: "Connectivity:",
+        testing: "Testing...",
+        download: "Download & Initialize",
+        customSettings: "Custom Source Settings",
+        readyTitle: "All Ready",
+        readySubtitle: "Configuration complete, welcome aboard!",
+        enterApp: "Enter EndCat",
+        checkingMetadata: "Checking metadata status...",
+        preparing: "Preparing to download...",
+        downloading: "Downloading: {filename} ({current}/{total})",
+        initPartial: "Initialization may not have completed successfully, please retry",
+        initFailed: "Initialization failed, please check network settings",
+        connectionFailed: "Connection Failed"
+    },
+    nav: {
+        home: "Home",
+        launcher: "Launch",
+        gacha: "Gacha Records",
+        settings: "Settings"
+    },
+    settings: {
+        about: "About",
+        checkUpdate: "Check Updates",
+        appearance: "Appearance",
+        theme: "Theme",
+        themeDesc: "Light, Dark, or System?",
+        themeSystem: "System",
+        themeLight: "Light",
+        themeDark: "Dark",
+        background: "Background Material",
+        bgDesc: "Change window background material",
+        bgDefault: "Default",
+        bgMinimal: "Minimal",
+        language: "Language",
+        langDesc: "EndCat interface language",
+        langZh: "中文-简体",
+        langEn: "English",
+        game: "Game",
+        gamePath: "Game Path",
+        userData: "User Data",
+        openUserData: "Open Data Directory",
+        userDataDesc: "User data, metadata, and cache files are located here",
+        update: {
+            current: "Current Version",
+            latest: "Latest Version",
+            latestUnknown: "Latest Version Unknown",
+            found: "New version found: {version}",
+            upToDate: "Up to date",
+            failed: "Failed to check for updates",
+            view: "View Release Page",
+            available: "New Update Available",
+            downloading: "Downloading update...",
+            downloadProgress: "Download progress: {progress}%",
+            preparing: "Preparing installation...",
+            installNow: "Update Now",
+            manualDownload: "Manual Download",
+            later: "Later",
+            installFailed: "Update installation failed"
+        },
+        metadata: {
+            title: "Metadata",
+            source: "Metadata Source",
+            sourceDesc: "Select metadata download source, or switch mirror/custom address",
+            sourceCdn: "GitHub (jsDelivr)",
+            sourceMirror: "GitHub (jsdmirror)",
+            sourceCustom: "Custom Source",
+            basePreview: "Current Source",
+            customPlaceholder: "Enter full base URL, must end with /",
+            customDesc: "Supports self-hosted mirrors or other CDNs, e.g., @main branch",
+            reset: "Reset Metadata",
+            resetDesc: "Clear downloaded metadata and icons, and re-fetch",
+            resetSuccess: "Local metadata reset",
+            resetFailed: "Reset failed, please retry"
+        },
+        buttons: {
+            github: "GitHub",
+            website: "Website",
+            feedback: "Feedback",
+            privacy: "Privacy Policy",
+            sponsor: "Sponsor Us"
+        },
+        messages: {
+            openLinkFailed: "Failed to open link",
+            devPlaceholder: "Not available in development"
+        },
+    },
+    gacha: {
+        refresh: "Refresh",
+        refreshIncremental: "Incremental Refresh",
+        refreshFull: "Full Refresh",
+        importExport: "Import/Export",
+        noAccount: "No Account Added",
+        addAccountTauriWarning: "Adding accounts requires running in Tauri desktop app",
+        addAccount: {
+            title: "Add Account",
+            help: "Click the button below to log in to Hypergryph Account. Account info will be retrieved automatically after login.",
+            loginBtn: "Login Hypergryph Account",
+            tokenPlaceholder: "Manually Paste Token",
+            selectUid: "Select UID",
+            next: "Next",
+            add: "Add",
+            openLoginError: "Failed to open login window",
+            invalidToken: "Please enter a valid Token",
+            noUid: "UID not found in binding list",
+            invalidUid: "Selected UID is invalid",
+            success: "Account added: {name}"
+        },
+        stats: {
+            s6: "6-Star",
+            s5: "5-Star",
+            s4: "4-Star",
+            s3: "3-Star",
+            total: "Total Pulls",
+            pity: "Pity Count",
+            avg6: "Avg 6-Star Pulls",
+            min6: "Min 6-Star Pulls",
+            max6: "Max 6-Star Pulls",
+            pulls: "Pulls",
+            records: "6-Star Records"
+        },
+        banner: {
+            beginnerTitle: "Beginner Banner",
+            specialTitle: "Character Event",
+            standardTitle: "Standard Banner",
+            weaponTitle: "Weapon: {name}",
+            weaponUnknown: "Unknown Weapon Pool",
+            topLabel: "6-Star Record"
+        },
+        messages: {
+            selectAccount: "Please select an account before refreshing",
+            tauriOnly: "Requires Tauri desktop app to refresh records",
+            missingToken: "oauth_token not found for this account, please re-add account",
+            syncIncremental: "Incremental sync complete, {count} new records",
+            syncFull: "Full sync complete",
+            saveFailed: "Failed to save records",
+            noNewRecords: "No new records found",
+            selectDelete: "Please select an account to delete",
+            confirmDelete: "Are you sure you want to delete account {uid}?",
+            deleteSuccess: "Account deleted"
+        }
+    },
+    home: {
+        subtitle: "An under-development toolkit for 'Arknights: Endfield'",
+    },
+    launcher: {
+        title: "Game Launch",
+        desc: "TODO: Launcher/Path Config/One-click Start"
+    },
+    errors: {
+        requestFailed: "Request failed {status}",
+        sqliteUnavailable: "SQLite only available in Tauri environment",
+        fetchGachaFailed: "Failed to fetch gacha records",
+        fetchWeaponPoolFailed: "Failed to fetch weapon pool",
+        fetchWeaponRecordsFailed: "Failed to fetch weapon records"
+    }
+}

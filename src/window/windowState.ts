@@ -1,3 +1,11 @@
+import {
+  getCurrentWindow,
+  currentMonitor,
+  primaryMonitor,
+  PhysicalSize,
+  PhysicalPosition,
+} from "@tauri-apps/api/window";
+
 type StoredWindowState = {
   version: 1;
   x: number;
@@ -40,10 +48,9 @@ function clamp(n: number, min: number, max: number) {
 export async function initWindowState() {
   if (!isTauri()) return;
 
-  const api = await import("@tauri-apps/api/window");
-  const win = api.getCurrentWindow();
+  const win = getCurrentWindow();
 
-  const monitor = (await api.currentMonitor()) ?? (await api.primaryMonitor());
+  const monitor = (await currentMonitor()) ?? (await primaryMonitor());
 
   async function centerWindow() {
     if (!monitor) return;
@@ -54,10 +61,10 @@ export async function initWindowState() {
     const x = monitor.workArea.position.x + Math.floor((workW - width) / 2);
     const y = monitor.workArea.position.y + Math.floor((workH - height) / 2);
     try {
-      await win.setSize(new api.PhysicalSize(width, height));
-      await win.setPosition(new api.PhysicalPosition(x, y));
+      await win.setSize(new PhysicalSize(width, height));
+      await win.setPosition(new PhysicalPosition(x, y));
     } catch {
-      // ignore centering failures
+      // 居中失败直接忽略
     }
   }
 
@@ -77,11 +84,11 @@ export async function initWindowState() {
 
   if (stored) {
     try {
-      await win.setSize(new api.PhysicalSize(stored.width, stored.height));
-      await win.setPosition(new api.PhysicalPosition(stored.x, stored.y));
+      await win.setSize(new PhysicalSize(stored.width, stored.height));
+      await win.setPosition(new PhysicalPosition(stored.x, stored.y));
       if (stored.maximized) await win.maximize();
     } catch {
-      // if restore fails, clear and center
+      // 恢复失败则清空记录并居中
       localStorage.removeItem(STORAGE_KEY);
       await centerWindow();
     }
@@ -123,7 +130,7 @@ export async function initWindowState() {
       await snapshot();
       scheduleSave();
     } catch {
-      // ignore
+      // 采集失败忽略，防止阻塞窗口事件
     }
   }
 

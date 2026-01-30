@@ -15,7 +15,7 @@ const language = computed({
 })
 
 const languages = [
-  { value: 'zh-CN', native: '简体中文' },
+  { value: 'zh-CN', native: '中文-简体' },
   { value: 'en-US', native: 'English' },
 ]
 

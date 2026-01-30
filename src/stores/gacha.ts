@@ -13,7 +13,7 @@ const { t } = i18n.global;
 type LocaleItem = { itemid?: string; name?: string };
 type LocaleNameMaps = { character: Map<string, string>; weapon: Map<string, string> };
 
-// Types
+// 类型定义
 export type SelectOption = { label: string; value: string };
 
 type GachaRecord = {
@@ -59,7 +59,7 @@ function isWeapon(rec: { pool_type?: string; pool_name?: string }) {
     return poolType.includes("Weapon") || poolName.includes("武器");
 }
 
-// Helpers are moved outside to keep store clean
+// 辅助函数放在组件外保持 store 简洁
 function sum(stats: BannerStats) {
     return stats.s6 + stats.s5 + stats.s4 + stats.s3;
 }
@@ -83,7 +83,7 @@ function buildStats(records: GachaRecord[]) {
     let s6 = 0;
     let s5 = 0;
     let s4 = 0;
-    // s3 not needed
+    // 不统计三星/二星
     let pullsSinceLast6 = 0;
     let min6 = Infinity;
     let max6 = 0;
@@ -92,18 +92,18 @@ function buildStats(records: GachaRecord[]) {
     let guarantee = 0;
     let foundFirst6 = false;
 
-    // Ordered newest to oldest!
+    // 记录按从新到旧遍历
     for (const rec of records) {
         pullsSinceLast6 += 1;
         if (rec.rarity === 6) {
             s6 += 1;
 
             if (!foundFirst6) {
-                // First 6-star encountered (newest).
+                // 最新的首个六星
                 guarantee = pullsSinceLast6 - 1;
                 foundFirst6 = true;
             } else {
-                // Subsequent 6-stars (completed cycles).
+                // 后续六星（完成一轮保底）
                 min6 = Math.min(min6, pullsSinceLast6);
                 max6 = Math.max(max6, pullsSinceLast6);
             }
@@ -114,16 +114,15 @@ function buildStats(records: GachaRecord[]) {
         } else if (rec.rarity === 4) {
             s4 += 1;
         }
-        // No s3/s2 counting
+        // 三星以下不计入
     }
 
-    // If no 6-star found, guarantee is the total count.
+    // 若从未出过六星，保底计数为当前累计
     if (!foundFirst6) {
         guarantee = pullsSinceLast6;
     } else {
-        // Handle the oldest 6-star (the last one encountered in the loop, or the only one)
-        // Its cost is the pulls accumulated since it (which are providing the 'start' history) + 1 (itself)
-        // Note: pullsSinceLast6 resets when we hit a 6-star. So here it counts items OLDER than the oldest 6-star.
+        // 处理最早的那次六星：它的代价是“之后的抽数”+自身
+        // pullsSinceLast6 在遇到六星时会清零，此处统计的是最早那次六星前的抽数
         const lastCost = pullsSinceLast6 + 1;
         min6 = Math.min(min6, lastCost);
         max6 = Math.max(max6, lastCost);
@@ -212,7 +211,7 @@ function generateBanners(charBeginner: GachaRecord[], charSpecial: GachaRecord[]
         });
     }
 
-    // Weapon Pools
+    // 武器卡池
     for (const [poolId, records] of weaponPools.entries()) {
         if (!records.length) continue;
         const stat = buildStats(records);
@@ -243,10 +242,10 @@ export const useGachaStore = defineStore("gacha", () => {
     const opened = ref<(string | number)[]>([]);
     const metadataDir = ref<string | null>(null);
 
-    // Computed
+    // 计算属性
     const accountsList = ref<any[]>([]);
 
-    // Computed
+    // 计算属性
     const currentNickname = computed(() => {
         if (!uid.value) return "";
         const acc = accountsList.value.find(a => a.uid === uid.value);
@@ -291,7 +290,7 @@ export const useGachaStore = defineStore("gacha", () => {
                     const json = (await res.json()) as unknown;
                     if (Array.isArray(json)) return json as LocaleItem[];
                 } catch (e) {
-                    // ignore and try next
+                    // 出错则继续尝试下一个候选文件
                 }
             }
         }
@@ -336,7 +335,7 @@ export const useGachaStore = defineStore("gacha", () => {
         return promise;
     }
 
-    // Actions
+    // 行为
     async function loadFromDb(targetUid: string) {
         if (!isSqliteAvailable() || !targetUid) return;
         try {
@@ -392,7 +391,7 @@ export const useGachaStore = defineStore("gacha", () => {
 
             for (const r of records) {
                 const type = r.pool_type;
-                // Constants from Hypergryph API
+                // Hypergryph 返回的官方枚举
                 if (type === "E_CharacterGachaPoolType_Special") charSpecial.push(r);
                 else if (type === "E_CharacterGachaPoolType_Standard") charStandard.push(r);
                 else if (type === "E_CharacterGachaPoolType_Beginner") charBeginner.push(r);
@@ -402,8 +401,7 @@ export const useGachaStore = defineStore("gacha", () => {
                     weaponPoolsMap.get(pid)!.push(r);
                 }
                 else {
-                    // Fallback to name guessing for legacy data where poolType might be missing (seq_id backfilled but pool_type not?)
-                    // Or if migration failed. But we don't have meta anymore.
+                    // 旧数据缺少 poolType 时根据名称兜底分类（无元数据可参照）
 
                     if (type.includes("Special")) charSpecial.push(r);
                     else if (type.includes("Standard")) charStandard.push(r);
@@ -424,10 +422,9 @@ export const useGachaStore = defineStore("gacha", () => {
                 }
             }
 
-            // Sort each pool by seq_id DESC (newest first) for correct guarantee calculation
-            // seq_id is a reliable ordering from the API, pulled_at may have duplicates
+            // 使用 seq_id 倒序，pulled_at 可能重复，seq_id 更稳定
             const sortDesc = (a: GachaRecord, b: GachaRecord) => {
-                // seq_id comparison: longer string = bigger number, or lexicographic for same length
+                // seq_id 比较：长度优先，其次字典序
                 if (a.seq_id.length !== b.seq_id.length) {
                     return b.seq_id.length - a.seq_id.length;
                 }
@@ -443,7 +440,7 @@ export const useGachaStore = defineStore("gacha", () => {
             const nextBanners = generateBanners(charBeginner, charSpecial, charStandard, weaponPoolsMap, iconGetter);
             if (nextBanners.length) {
                 banners.value = nextBanners;
-                // If opened is empty, open all? Or persist opened state?
+                // 初始时全部展开，保留用户已展开状态
                 if (opened.value.length === 0) {
                     opened.value = nextBanners.map((b) => b.id);
                 }
@@ -478,7 +475,7 @@ export const useGachaStore = defineStore("gacha", () => {
         const accounts = await listAccounts();
         accountsList.value = accounts;
 
-        // Use roleId for display (simplified for external label)
+        // 优先展示游戏内角色 ID，缺失时退回 UID
         uidOptions.value = accounts.map((a) => {
             const label = a.roleId ? `${a.roleId}` : a.uid;
             return { label, value: a.uid };
@@ -492,7 +489,7 @@ export const useGachaStore = defineStore("gacha", () => {
                     : uidOptions.value[0]?.value ?? "";
 
         uid.value = nextUid;
-        // Note: setting uid.value triggers watch(uid), which calls loadFromDb
+        // 修改 uid 会触发 watch(uid) 重新加载记录
     }
 
     async function refreshGacha(mode: "incremental" | "full" = "incremental") {
@@ -509,7 +506,7 @@ export const useGachaStore = defineStore("gacha", () => {
             const account = await getAccountTokens(uid.value);
             if (!account?.oauthToken) throw new Error(t("gacha.messages.missingToken"));
 
-            // Always refresh u8Token before fetching (tokens expire quickly)
+            // 刷新 u8Token（有效期短）
             const token = await invoke<string>("hg_u8_token_by_uid", {
                 uid: account.uid,
                 oauthToken: account.oauthToken,
@@ -517,12 +514,11 @@ export const useGachaStore = defineStore("gacha", () => {
 
             const serverId = "1";
 
-            // For incremental mode, we find the latest seq_id for each pool
+            // 增量模式下记录每个卡池的最新 seq_id
             const lastSeqMap = new Map<string, string>();
             if (mode === "incremental") {
-                // Better approach: list latest records from DB directly or keep a 'raw' list.
-                // For now, let's query DB for latest seqId per poolType
-                const pulls = await listGachaPulls(uid.value, 1000); // latest 1000 is enough
+                // 简单取最近 1000 条记录推断最新 seq_id
+                const pulls = await listGachaPulls(uid.value, 1000); // 取最近 1000 条足够
                 for (const p of pulls) {
                     const key = p.poolType === "E_CharacterGachaPoolType_Weapon" ? p.bannerId : p.poolType;
                     if (key && !lastSeqMap.has(key)) {
@@ -533,7 +529,7 @@ export const useGachaStore = defineStore("gacha", () => {
 
             console.log(`[gacha] refreshing mode=${mode}, lastSeqMap size=${lastSeqMap.size}`);
 
-            // Use Tauri backend for API calls (avoid CORS)
+            // 调用 Tauri 后端避免浏览器 CORS
             const [charSpecial, charStandard, charBeginner] = await Promise.all([
                 invoke<GachaRecord[]>("hg_fetch_char_records", {
                     token, serverId, poolType: "E_CharacterGachaPoolType_Special",
@@ -613,7 +609,7 @@ export const useGachaStore = defineStore("gacha", () => {
         banners,
         opened,
         bannerSummary,
-        reloadAccounts, // exposed for initialization or explicit reload
+        reloadAccounts, // 提供给初始化或手动刷新调用
         refreshGacha,
         deleteCurrentAccount,
         currentNickname,

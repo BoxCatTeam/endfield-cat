@@ -1,9 +1,9 @@
-import { invoke } from "@tauri-apps/api/core";
 import { isSqliteAvailable } from "./db";
+import { dbDeleteAccount, dbGetAccountTokens, dbListAccounts, dbUpsertAccount } from "../api/tauriCommands";
 
 export type Account = {
   uid: string;
-  roleId: string | null;  // For display (game character ID)
+  roleId: string | null;  // 用于展示的角色 ID
   nickName: string | null;
   updatedAt: number;
 };
@@ -18,8 +18,8 @@ export type AccountWithTokens = {
 };
 
 export async function listAccounts(): Promise<Account[]> {
-  if (!isSqliteAvailable) return [];
-  return await invoke<Account[]>("db_list_accounts");
+  if (!isSqliteAvailable()) return [];
+  return await dbListAccounts<Account[]>();
 }
 
 export async function upsertAccount(args: {
@@ -30,20 +30,13 @@ export async function upsertAccount(args: {
   oauthToken: string;
   u8Token: string;
 }) {
-  await invoke("db_upsert_account", {
-    uid: args.uid,
-    roleId: args.roleId ?? null,
-    nickName: args.nickName ?? null,
-    userToken: args.userToken,
-    oauthToken: args.oauthToken,
-    u8Token: args.u8Token,
-  });
+  await dbUpsertAccount(args);
 }
 
 export async function deleteAccount(uid: string) {
-  await invoke("db_delete_account", { uid });
+  await dbDeleteAccount(uid);
 }
 
 export async function getAccountTokens(uid: string): Promise<AccountWithTokens | null> {
-  return await invoke<AccountWithTokens | null>("db_get_account_tokens", { uid });
+  return await dbGetAccountTokens<AccountWithTokens | null>(uid);
 }

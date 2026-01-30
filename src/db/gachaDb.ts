@@ -1,5 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
 import { isSqliteAvailable } from "./db";
+import { dbDeleteInvalidGachaRecords, dbListGachaPulls, dbSaveGachaRecords } from "../api/tauriCommands";
 
 export { isSqliteAvailable };
 
@@ -27,29 +27,22 @@ export interface ApiGachaRecord {
 }
 
 export async function deleteInvalidGachaRecords(uid: string) {
-  await invoke("db_delete_invalid_gacha_records", { uid });
+  await dbDeleteInvalidGachaRecords(uid);
 }
 
 export async function saveGachaRecords(uid: string, records: any[]) {
   if (records.length === 0) return;
-  // backend expects snake_case fields which match the raw records from hg_api
-  await invoke("db_save_gacha_records", { uid, records });
+  // 后端期望 snake_case，与 hg_api 原始字段保持一致
+  await dbSaveGachaRecords(uid, records);
 }
 
 /**
  * @deprecated Helper is now internal to backend
  */
 export async function saveGachaPulls(_pulls: GachaPull[]) {
-  // This was used internally or potentially by other callers? 
-  // If it's used elsewhere, we might need to support it or migrate callers.
-  // Checking usage is wise, but 'encapsulate all SQL' implies we shouldn't have SQL here.
-  // Ideally this function should be removed or throw error.
-  // But to be safe I'll leave it empty or log warning, OR better, check if others use it.
-  // The original code exported it.
-  // If I strictly follow "remove ts queries", I can't keep the implementation.
-  console.warn("saveGachaPulls is deprecated and no longer functional on frontend");
+  console.warn("saveGachaPulls 已弃用，前端不再实现");
 }
 
 export async function listGachaPulls(uid: string, limit = 200): Promise<GachaPull[]> {
-  return await invoke<GachaPull[]>("db_list_gacha_pulls", { uid, limit });
+  return await dbListGachaPulls<GachaPull[]>(uid, limit);
 }

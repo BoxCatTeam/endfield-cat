@@ -14,7 +14,7 @@
   <a href="../LICENSE">
     <img src="https://img.shields.io/badge/License-GPL_v2-blue.svg" alt="License">
   </a>
-  <img src="https://img.shields.io/badge/Version-0.1.0-green.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.1.2-green.svg" alt="Version">
   <img src="https://img.shields.io/badge/Tauri-v2-orange.svg" alt="Tauri">
   <img src="https://img.shields.io/badge/Vue-v3-42b883.svg" alt="Vue">
 </p>
@@ -22,6 +22,10 @@
 ---
 
 [简体中文](../README.md) | **English**
+
+<p align="center">
+  <img src="./preview.png" width="800" alt="Preview">
+</p>
 
 ## 📖 Introduction
 

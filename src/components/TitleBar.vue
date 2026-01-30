@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute } from "vue-router";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { quitApp } from "../api/tauriCommands";
 const route = useRoute();
 
-const title = computed(() => (route.meta?.title as string | undefined) ?? "endfield-cat");
+const title = computed(() => (route.meta?.title as string | undefined) ?? "");
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in (window as any);
 
 async function startDragging() {
   if (!isTauri) return;
-  const { getCurrentWindow } = await import("@tauri-apps/api/window");
   await getCurrentWindow().startDragging();
 }
 
@@ -26,7 +27,6 @@ async function tryStartDragging(ev: PointerEvent) {
 
 async function windowAction(action: "minimize" | "toggleMaximize" | "close") {
   if (!isTauri) return;
-  const { getCurrentWindow } = await import("@tauri-apps/api/window");
   const win = getCurrentWindow();
 
   if (action === "minimize") await win.minimize();
@@ -35,8 +35,7 @@ async function windowAction(action: "minimize" | "toggleMaximize" | "close") {
     try {
       await win.close();
     } finally {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("quit");
+      await quitApp();
     }
   }
 }

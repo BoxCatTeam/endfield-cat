@@ -3,6 +3,14 @@ use serde_json::Value;
 
 use super::utils::{json_str, json_i64};
 
+macro_rules! log_dev {
+    ($($arg:tt)*) => {
+        if cfg!(debug_assertions) {
+            println!($($arg)*);
+        }
+    };
+}
+
 #[derive(Serialize)]
 pub struct HgExchangeResult {
     pub oauth_token: String,
@@ -48,7 +56,7 @@ fn extract_binding_info(binding_list_json: &Value) -> (Vec<String>, Vec<String>,
     let mut results: Vec<(String, String, String)> = Vec::new();
 
     let Some(list) = binding_list_json.pointer("/data/list").and_then(|v| v.as_array()) else {
-        println!("[hg-exchange] no /data/list in binding response");
+        log_dev!("[hg-exchange] no /data/list in binding response");
         return (vec![], vec![], vec![]);
     };
 
@@ -111,7 +119,7 @@ fn extract_binding_info(binding_list_json: &Value) -> (Vec<String>, Vec<String>,
 #[tauri::command]
 pub async fn hg_exchange_user_token(token: String) -> Result<HgExchangeResult, String> {
     let token = token.trim();
-    println!("[hg-exchange] called with token len={}", token.len());
+    log_dev!("[hg-exchange] called with token len={}", token.len());
 
     if token.is_empty() {
         return Err("missing token".to_owned());
@@ -144,7 +152,7 @@ pub async fn hg_exchange_user_token(token: String) -> Result<HgExchangeResult, S
             .get("msg")
             .and_then(|v| v.as_str())
             .unwrap_or("OAuth 换取失败");
-        println!(
+        log_dev!(
             "[hg-exchange] grant failed code={} msg={} body={:?}",
             code, msg, grant_json
         );
@@ -155,10 +163,10 @@ pub async fn hg_exchange_user_token(token: String) -> Result<HgExchangeResult, S
         .or_else(|| json_str(&grant_json, "/token"))
         .unwrap_or_default();
     if oauth_token.trim().is_empty() {
-        println!("[hg-exchange] oauth_token missing in grant body {:?}", grant_json);
+        log_dev!("[hg-exchange] oauth_token missing in grant body {:?}", grant_json);
         return Err("OAuth 响应缺少 token".to_owned());
     }
-    println!(
+    log_dev!(
         "[hg-exchange] oauth_token len={} uids? pending binding_list",
         oauth_token.len()
     );
@@ -173,7 +181,7 @@ pub async fn hg_exchange_user_token(token: String) -> Result<HgExchangeResult, S
         .await
         .map_err(|e| e.to_string())?;
     
-    println!("[hg-exchange] binding_list response: {:?}", binding_json);
+    log_dev!("[hg-exchange] binding_list response: {:?}", binding_json);
 
     let status = json_i64(&binding_json, "status").unwrap_or(-1);
     if status != 0 {
@@ -194,7 +202,7 @@ pub async fn hg_exchange_user_token(token: String) -> Result<HgExchangeResult, S
 
 #[tauri::command]
 pub async fn hg_u8_token_by_uid(uid: String, oauth_token: String) -> Result<String, String> {
-    println!("[hg-u8] called with uid={}, oauth_token len={}", uid, oauth_token.len());
+    log_dev!("[hg-u8] called with uid={}, oauth_token len={}", uid, oauth_token.len());
     
     if uid.trim().is_empty() {
         return Err("missing uid".to_owned());
@@ -212,7 +220,7 @@ pub async fn hg_u8_token_by_uid(uid: String, oauth_token: String) -> Result<Stri
         "uid": uid,
         "token": oauth_token,
     });
-    println!("[hg-u8] request body: {:?}", request_body);
+    log_dev!("[hg-u8] request body: {:?}", request_body);
 
     let u8_json = client
         .post("https://binding-api-account-prod.hypergryph.com/account/binding/v1/u8_token_by_uid")
@@ -224,7 +232,7 @@ pub async fn hg_u8_token_by_uid(uid: String, oauth_token: String) -> Result<Stri
         .await
         .map_err(|e| e.to_string())?;
 
-    println!("[hg-u8] response: {:?}", u8_json);
+    log_dev!("[hg-u8] response: {:?}", u8_json);
 
     let status = json_i64(&u8_json, "status").unwrap_or(-1);
     if status != 0 {
@@ -239,6 +247,6 @@ pub async fn hg_u8_token_by_uid(uid: String, oauth_token: String) -> Result<Stri
         return Err("u8_token 响应缺少 data.token".to_owned());
     };
 
-    println!("[hg-u8] got u8_token len={}", u8_token.len());
+    log_dev!("[hg-u8] got u8_token len={}", u8_token.len());
     Ok(u8_token)
 }

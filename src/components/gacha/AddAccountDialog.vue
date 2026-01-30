@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { Snackbar } from "@varlet/ui";
+import { listen } from "@tauri-apps/api/event";
 import { isSqliteAvailable } from "../../db/db";
 import { upsertAccount } from "../../db/accountDb";
 import { useI18n } from 'vue-i18n';
+import { exchangeHgUserToken, getHgU8TokenByUid, openHgTokenWebview } from "../../api/tauriCommands";
 
 const { t } = useI18n();
 
 type SelectOption = { label: string; value: string };
-type HgExchangeResult = { oauth_token: string; uids: string[]; role_ids: string[]; nick_names: string[] };
 
 const props = defineProps<{
   show: boolean;
@@ -34,7 +35,7 @@ const addAccountConfirmDisabled = computed(() => {
 
 function handleClose() {
   emit("update:show", false);
-  // Reset state
+  // 重置对话框状态
   addAccountInput.value = "";
   addAccountStep.value = "token";
   addAccountOauthToken.value = "";
@@ -45,7 +46,7 @@ function handleClose() {
 function normalizeUserToken(input: string): string | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
-  // If it's a JSON string, try to extract user_token
+  // JSON 字符串时尝试提取 user_token
   if (trimmed.startsWith("{")) {
     try {
       const data = JSON.parse(trimmed);
@@ -60,8 +61,7 @@ function normalizeUserToken(input: string): string | null {
 async function startWebviewTokenFlow() {
   addAccountWebviewLoading.value = true;
   try {
-    const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("hg_open_token_webview");
+    await openHgTokenWebview();
   } catch (err) {
     Snackbar.error((err as Error)?.message ?? t('gacha.addAccount.openLoginError'));
   } finally {
@@ -79,10 +79,7 @@ async function onAddAccountConfirm() {
 
     addAccountLoading.value = true;
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      const res = await invoke<HgExchangeResult>("hg_exchange_user_token", {
-        token: userToken,
-      });
+      const res = await exchangeHgUserToken(userToken);
 
       addAccountOauthToken.value = res.oauth_token;
       const uids = res.uids ?? [];
@@ -93,7 +90,7 @@ async function onAddAccountConfirm() {
         throw new Error(t('gacha.addAccount.noUid'));
       }
 
-      // Populate options
+      // 填充账号选项
       addAccountUidOptions.value = uids.map((uid, i) => {
         const roleId = roleIds[i] ?? uid;
         const nickName = nickNames[i] ?? "";
@@ -107,7 +104,7 @@ async function onAddAccountConfirm() {
         return;
       }
 
-      // Only one UID, finalize directly
+      // 仅有一个 UID 时直接完成
       await finalizeAddAccount(userToken, uids[0], roleIds[0] || uids[0], nickNames[0] || "", res.oauth_token);
       handleClose();
     } catch (err) {
@@ -116,16 +113,12 @@ async function onAddAccountConfirm() {
       addAccountLoading.value = false;
     }
   } else {
-    // Step 'uid'
+    // UID 选择步骤
     addAccountLoading.value = true;
     try {
       const userToken = normalizeUserToken(addAccountInput.value)!;
-      const { invoke } = await import("@tauri-apps/api/core");
-      
-      // Re-exchange because we don't store everything in refs, ensures accurate metadata
-      const res = await invoke<HgExchangeResult>("hg_exchange_user_token", {
-        token: userToken,
-      });
+      // 再次换取 token，确保取到最新元数据
+      const res = await exchangeHgUserToken(userToken);
 
       const idx = res.uids.findIndex(u => u === addAccountSelectedUid.value);
       if (idx === -1) throw new Error(t('gacha.addAccount.invalidUid'));
@@ -147,8 +140,7 @@ async function onAddAccountConfirm() {
 }
 
 async function finalizeAddAccount(userToken: string, uidValue: string, roleId: string, nickName: string, oauthToken: string) {
-  const { invoke } = await import("@tauri-apps/api/core");
-  const u8Token = await invoke<string>("hg_u8_token_by_uid", {
+  const u8Token = await getHgU8TokenByUid({
     uid: uidValue,
     oauthToken: oauthToken,
   });
@@ -172,7 +164,6 @@ let unlistenAutoToken: null | (() => void) = null;
 onMounted(async () => {
   if (!isSqliteAvailable()) return;
 
-  const { listen } = await import("@tauri-apps/api/event");
   unlistenAutoToken = await listen<string>("hg:auto-token", (event) => {
     addAccountInput.value = event.payload;
     addAccountStep.value = "token";

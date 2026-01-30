@@ -2,6 +2,14 @@ use serde::Serialize;
 use serde_json::Value;
 use super::utils::json_i64;
 
+macro_rules! log_dev {
+    ($($arg:tt)*) => {
+        if cfg!(debug_assertions) {
+            println!($($arg)*);
+        }
+    };
+}
+
 #[derive(Serialize)]
 pub struct GachaRecord {
     pub name: String,
@@ -24,7 +32,7 @@ pub async fn hg_fetch_char_records(
     pool_type: String,
     last_seq_id_stop: Option<String>,
 ) -> Result<Vec<GachaRecord>, String> {
-    println!("[hg-gacha] fetching char records: pool_type={}, stop_at={:?}", pool_type, last_seq_id_stop);
+    log_dev!("[hg-gacha] fetching char records: pool_type={}, stop_at={:?}", pool_type, last_seq_id_stop);
 
     let url = "https://ef-webview.hypergryph.com/api/record/char";
     let mut all_records = Vec::new();
@@ -41,7 +49,7 @@ pub async fn hg_fetch_char_records(
             params.push(("seq_id", seq));
         }
 
-        println!("[hg-gacha] fetching page seq_id={:?}", next_seq_id);
+        log_dev!("[hg-gacha] fetching page seq_id={:?}", next_seq_id);
 
         let json = client
             .get(url)
@@ -73,7 +81,7 @@ pub async fn hg_fetch_char_records(
             // Incremental stop check
             if let Some(stop_id) = &last_seq_id_stop {
                 if &seq_id == stop_id {
-                    println!("[hg-gacha] reached last_seq_id={}, stopping", stop_id);
+                    log_dev!("[hg-gacha] reached last_seq_id={}, stopping", stop_id);
                     break 'outer;
                 }
             }
@@ -100,7 +108,7 @@ pub async fn hg_fetch_char_records(
         }
 
         if all_records.len() > 10000 {
-            println!("[hg-gacha] too many records, breaking");
+            log_dev!("[hg-gacha] too many records, breaking");
             break;
         }
         
@@ -113,7 +121,7 @@ pub async fn hg_fetch_char_records(
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
 
-    println!("[hg-gacha] fetched total {} char records", all_records.len());
+    log_dev!("[hg-gacha] fetched total {} char records", all_records.len());
     Ok(all_records)
 }
 
@@ -129,7 +137,7 @@ pub async fn hg_fetch_weapon_pools(
     token: String,
     server_id: String,
 ) -> Result<Vec<WeaponPool>, String> {
-    println!("[hg-gacha] fetching weapon pools");
+    log_dev!("[hg-gacha] fetching weapon pools");
 
     let url = "https://ef-webview.hypergryph.com/api/record/weapon/pool";
     let params = [
@@ -162,7 +170,7 @@ pub async fn hg_fetch_weapon_pools(
         }
     }).collect();
 
-    println!("[hg-gacha] fetched {} weapon pools", pools.len());
+    log_dev!("[hg-gacha] fetched {} weapon pools", pools.len());
     Ok(pools)
 }
 
@@ -174,7 +182,7 @@ pub async fn hg_fetch_weapon_records(
     pool_id: String,
     last_seq_id_stop: Option<String>,
 ) -> Result<Vec<GachaRecord>, String> {
-    println!("[hg-gacha] fetching weapon records: pool_id={}, stop_at={:?}", pool_id, last_seq_id_stop);
+    log_dev!("[hg-gacha] fetching weapon records: pool_id={}, stop_at={:?}", pool_id, last_seq_id_stop);
 
     let url = "https://ef-webview.hypergryph.com/api/record/weapon";
     let mut all_records = Vec::new();
@@ -191,7 +199,7 @@ pub async fn hg_fetch_weapon_records(
             params.push(("seq_id", seq));
         }
 
-        println!("[hg-gacha] fetching weapon page seq_id={:?}", next_seq_id);
+        log_dev!("[hg-gacha] fetching weapon page seq_id={:?}", next_seq_id);
 
         let json = client
             .get(url)
@@ -223,7 +231,7 @@ pub async fn hg_fetch_weapon_records(
             // Incremental stop check
             if let Some(stop_id) = &last_seq_id_stop {
                 if &seq_id == stop_id {
-                    println!("[hg-gacha] reached weapon last_seq_id={}, stopping", stop_id);
+                    log_dev!("[hg-gacha] reached weapon last_seq_id={}, stopping", stop_id);
                     break 'outer;
                 }
             }
@@ -262,6 +270,6 @@ pub async fn hg_fetch_weapon_records(
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
 
-    println!("[hg-gacha] fetched total {} weapon records", all_records.len());
+    log_dev!("[hg-gacha] fetched total {} weapon records", all_records.len());
     Ok(all_records)
 }

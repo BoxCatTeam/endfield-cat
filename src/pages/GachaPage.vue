@@ -23,13 +23,8 @@ function openAddAccountDialog() {
 }
 
 async function onAccountAdded(newUid: string) {
-  // Reload accounts and prefer the new UID
+  // 新账号添加后选中该 UID 并拉取最新数据
   await store.reloadAccounts(newUid);
-  // Optional: Auto refresh data from network?
-  // Previous logic called onRefresh() which fetches from network.
-  // Store reloadAccounts only loads from DB.
-  // If new account added, it has no records in DB yet.
-  // So we should indeed call refreshGacha to fetch initial data.
   await store.refreshGacha();
 }
 
@@ -215,7 +210,6 @@ onMounted(() => {
 .collapse :deep(.var-collapse-item__title) {
   font-weight: 650;
 }
-
 
 .btn-content {
   display: flex;

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { checkMetadata as checkMetadataCommand, fetchMetadataManifest, readConfig, saveConfig as saveConfigCommand } from '../api/tauriCommands'
 
 const METADATA_CDN_TEMPLATE = 'https://cdn.jsdelivr.net/gh/BoxCatTeam/endfield-cat-metadata@v{version}/'
 const METADATA_MIRROR_TEMPLATE = 'https://cdn.jsdmirror.com/gh/BoxCatTeam/endfield-cat-metadata@v{version}/'
@@ -31,7 +31,7 @@ export const useAppStore = defineStore('app', () => {
 
   const configCache = ref<Record<string, any>>({})
 
-  // Flag to avoid saving during initial load
+  // 初次加载时避免写回配置
   const isLoaded = ref(false)
   const metadataStatus = ref<MetadataStatus | null>(null)
   const metadataNeedCheck = computed(() => {
@@ -60,10 +60,10 @@ export const useAppStore = defineStore('app', () => {
 
   const firstRun = ref(true)
 
-  // Load config from Rust backend
+  // 从后端读取配置
   const loadConfig = async () => {
     try {
-      const config: any = await invoke('read_config')
+      const config: any = await readConfig()
       console.log('Loaded config:', config)
       configCache.value = config || {}
 
@@ -73,17 +73,17 @@ export const useAppStore = defineStore('app', () => {
       if (config?.firstRun !== undefined) firstRun.value = config.firstRun
 
       const metadata = (config?.metadata as Record<string, any>) || {}
-      // baseUrl is hard-coded in app; only persist customBase.
+      // baseUrl 固定在前端，只持久化自定义地址
       if (metadata.customBase) metadataCustomBase.value = metadata.customBase
 
       isLoaded.value = true
     } catch (error) {
       console.error('Failed to load config:', error)
-      isLoaded.value = true // valid to proceed with defaults
+      isLoaded.value = true // 读取失败也继续使用默认值
     }
   }
 
-  // Save config to Rust backend
+  // 将配置写回后端
   const saveConfig = async () => {
     if (!isLoaded.value) return
 
@@ -100,13 +100,13 @@ export const useAppStore = defineStore('app', () => {
         }
       }
       configCache.value = nextConfig
-      await invoke('save_config', { config: nextConfig })
+      await saveConfigCommand(nextConfig)
     } catch (error) {
       console.error('Failed to save config:', error)
     }
   }
 
-  // Watch for changes and save
+  // 监听变更自动保存
   watch([theme, background, language, metadataCustomBase, firstRun], () => {
     void saveConfig()
   })
@@ -118,12 +118,12 @@ export const useAppStore = defineStore('app', () => {
 
   const checkMetadata = async () => {
     try {
-      const status = await invoke<MetadataStatus>('check_metadata')
+      const status = await checkMetadataCommand<MetadataStatus>()
       let merged: MetadataStatus = status
 
       if ((status.isEmpty || !status.hasManifest) && metadataBaseUrl.value.trim()) {
         try {
-          const remote = await invoke<RemoteManifest>('fetch_metadata_manifest', { baseUrl: metadataBaseUrl.value, version: metadataVersion.value })
+          const remote = await fetchMetadataManifest<RemoteManifest>({ baseUrl: metadataBaseUrl.value, version: metadataVersion.value })
           merged = { ...status, remote }
         } catch (error) {
           console.error('Failed to fetch remote manifest:', error)

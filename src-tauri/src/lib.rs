@@ -1,6 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
 mod app_cmd;
+mod services;
 mod database;
 mod hg_api;
 mod hg_auth;

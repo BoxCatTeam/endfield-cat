@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n'
 const route = useRoute()
 const { t } = useI18n()
 
-// Map routes to step indices
+// 路由名称与步骤编号映射
 const stepMap: Record<string, number> = {
   'guide-welcome': 0,
   'guide-disclaimer': 1,
@@ -16,7 +16,7 @@ const stepMap: Record<string, number> = {
 
 const step = ref(0)
 
-// Sync step with route
+// 根据路由同步步骤高亮
 watch(
   () => route.name,
   (newRouteName) => {
@@ -29,7 +29,7 @@ watch(
 )
 
 onMounted(() => {
-    // Optional: Redirect logic if needed, but router redirect handles default
+  // 额外跳转逻辑由路由重定向处理，此处无需动作
 })
 </script>
 
@@ -45,7 +45,7 @@ onMounted(() => {
           <var-step>{{ t('guide.stepFinish') }}</var-step>
         </var-steps>
 
-        <!-- Router View with Transition -->
+        <!-- 带过渡的子路由区域 -->
         <router-view v-slot="{ Component }">
           <transition name="fade-slide" mode="out-in">
             <component :is="Component" />
@@ -74,7 +74,7 @@ onMounted(() => {
   flex-direction: column;
 }
 
-/* Dark mode bg override */
+/* 深色模式的背景覆盖 */
 @media (prefers-color-scheme: dark) {
   .guide-page-bg {
     background-image: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
@@ -93,7 +93,7 @@ onMounted(() => {
   margin-bottom: 24px;
 }
 
-/* Transitions */
+/* 过渡动画 */
 .fade-slide-enter-active,
 .fade-slide-leave-active {
   transition: all 0.3s ease;
