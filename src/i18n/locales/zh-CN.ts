@@ -1,0 +1,179 @@
+export default {
+    common: {
+        appName: "EndCat",
+        notAvailable: "开发中暂不可用",
+        clickTip: "点击了: {label}",
+        retry: "重试",
+        disclaimer: {
+            title: "免责声明",
+            items: [
+                "本软件以“现状”提供，不作任何明示或默示的保证（包括但不限于可用性、稳定性、准确性或适销性/特定用途适用性）；因使用本软件造成的任何直接或间接损失由用户自行承担。",
+                "本软件仅供个人学习与研究使用，禁止商业化使用、再分发或提供任何增值服务；因违反上述限制产生的责任由使用者自行承担。",
+                "使用本软件须遵守所在国家/地区的适用法律法规、游戏/平台服务条款及知识产权要求；如对合规或安全存在疑虑，请立即停止使用并卸载。"
+            ]
+        }
+    },
+    guide: {
+        title: "欢迎",
+        welcomeTitle: "欢迎使用 EndCat",
+        welcomeSubtitle: "您的明日方舟：终末地游戏助手",
+        welcomeIntro1: "EndCat 能帮助您轻松管理游戏数据与记录。",
+        welcomeIntro2: "只需几步简单配置，即可开始使用。",
+        startSetup: "开始配置",
+        stepWelcome: "欢迎",
+        stepResource: "资源",
+        stepFinish: "完成",
+        resourceTitle: "资源初始化",
+        checkingEnv: "正在检查环境...",
+        missingTitle: "缺少必要的元数据文件",
+        missingDesc1: "为了正常运行，EndCat 需要下载约 3MB 的数据文件。",
+        missingDesc2: "这通常只需要几秒钟。",
+        currentSource: "当前源:",
+        connectivity: "连通性:",
+        testing: "测试中...",
+        download: "一键下载与初始化",
+        customSettings: "自定义数据源设置",
+        readyTitle: "一切准备就绪",
+        readySubtitle: "配置已完成，欢迎加入！",
+        enterApp: "进入 EndCat",
+        checkingMetadata: "正在检查元数据状态...",
+        preparing: "准备下载...",
+        downloading: "正在下载: {filename} ({current}/{total})",
+        initPartial: "初始化似乎未完全成功，请重试",
+        initFailed: "初始化失败，请检查网络设置",
+        connectionFailed: "连接失败"
+    },
+    nav: {
+        home: "主页",
+        launcher: "游戏启动",
+        gacha: "寻访记录",
+        settings: "设置"
+    },
+    settings: {
+        about: "关于",
+        checkUpdate: "检查更新",
+        appearance: "外观",
+        theme: "主题",
+        themeDesc: "亮色、深色还是跟随系统？",
+        themeSystem: "跟随系统",
+        themeLight: "亮色主题",
+        themeDark: "深色主题",
+        background: "背景材质",
+        bgDesc: "更改窗体背景材质",
+        bgDefault: "默认",
+        bgMinimal: "极简",
+        language: "语言",
+        langDesc: "EndCat 界面显示语言",
+        langZh: "中文(简体)",
+        langEn: "English",
+        game: "游戏",
+        gamePath: "游戏路径",
+        userData: "用户数据",
+        openUserData: "打开数据目录",
+        userDataDesc: "用户数据、元数据、缓存文件 均在此目录",
+        update: {
+            current: "当前版本",
+            latest: "最新版本",
+            latestUnknown: "最新版本未知",
+            found: "发现新版本：{version}",
+            upToDate: "已经是最新版本",
+            failed: "检查更新失败",
+            view: "查看发布页"
+        },
+        metadata: {
+            title: "元数据",
+            source: "元数据源",
+            sourceDesc: "选择元数据下载源，或切换镜像/自定义地址",
+            sourceCdn: "GitHub (jsDelivr)",
+            sourceMirror: "GitHub (jsdmirror)",
+            sourceCustom: "自定义源",
+            basePreview: "当前源",
+            customPlaceholder: "输入完整基础地址，需以 / 结尾",
+            customDesc: "支持自建镜像或其他 CDN，例如 @main 分支",
+            reset: "重置元数据",
+            resetDesc: "清空已下载的 metadata 与图标，重新拉取",
+            resetSuccess: "本地元数据已重置",
+            resetFailed: "重置失败，请重试"
+        },
+        buttons: {
+            github: "GitHub",
+            website: "官网",
+            feedback: "建议与反馈",
+            privacy: "隐私协议",
+            sponsor: "赞助我们"
+        },
+        messages: {
+            openLinkFailed: "无法打开链接",
+            devPlaceholder: "开发中暂不可用"
+        },
+    },
+    gacha: {
+        refresh: "刷新",
+        refreshIncremental: "增量刷新",
+        refreshFull: "全量刷新",
+        importExport: "导入/导出",
+        noAccount: "未添加账号",
+        addAccountTauriWarning: "添加账号需要在 Tauri 桌面端运行",
+        addAccount: {
+            title: "添加账号",
+            help: "点击下方按钮登录鹰角通行证，登录成功后将自动获取账号信息。",
+            loginBtn: "登录鹰角通行证",
+            tokenPlaceholder: "手动粘贴 Token",
+            selectUid: "选择 UID",
+            next: "下一步",
+            add: "添加",
+            openLoginError: "打开登录窗口失败",
+            invalidToken: "请输入有效的 Token",
+            noUid: "绑定列表中未找到 UID",
+            invalidUid: "所选 UID 无效",
+            success: "已添加账号：{name}"
+        },
+        stats: {
+            s6: "六星",
+            s5: "五星",
+            s4: "四星",
+            s3: "三星",
+            total: "总寻访数",
+            pity: "保底已垫",
+            avg6: "六星平均抽数",
+            min6: "六星最小抽数",
+            max6: "最大六星抽数",
+            pulls: "抽",
+            records: "六星记录"
+        },
+        banner: {
+            beginnerTitle: "启程寻访",
+            specialTitle: "角色活动",
+            standardTitle: "标准寻访",
+            weaponTitle: "武器：{name}",
+            weaponUnknown: "未知武器池",
+            topLabel: "六星记录"
+        },
+        messages: {
+            selectAccount: "请选择账号后再刷新",
+            tauriOnly: "需要在 Tauri 桌面端运行以刷新记录",
+            missingToken: "未找到该账号的 oauth_token，请重新添加账号",
+            syncIncremental: "增量同步完成，新增 {count} 条记录",
+            syncFull: "全量同步完成",
+            saveFailed: "保存记录失败",
+            noNewRecords: "没有发现新记录",
+            selectDelete: "请选择要删除的账号",
+            confirmDelete: "确认删除账号 {uid} 吗？",
+            deleteSuccess: "已删除账号"
+        }
+    },
+    home: {
+        subtitle: "一个还在开发中的「明日方舟：终末地」工具箱",
+    },
+    launcher: {
+        title: "游戏启动",
+        desc: "TODO：启动器/路径配置/一键启动"
+    },
+    errors: {
+        requestFailed: "请求失败 {status}",
+        sqliteUnavailable: "SQLite 仅在 Tauri 环境可用",
+        fetchGachaFailed: "获取寻访记录失败",
+        fetchWeaponPoolFailed: "获取武器池失败",
+        fetchWeaponRecordsFailed: "获取武器记录失败"
+    }
+}
