@@ -74,6 +74,8 @@ export const useAppStore = defineStore('app', () => {
 
       const metadata = (config?.metadata as Record<string, any>) || {}
       // baseUrl 固定在前端，只持久化自定义地址
+      if (metadata.sourceType) metadataSourceType.value = metadata.sourceType as MetadataSourceType
+      if (metadata.version) metadataVersion.value = metadata.version
       if (metadata.customBase) metadataCustomBase.value = metadata.customBase
 
       isLoaded.value = true
@@ -96,6 +98,9 @@ export const useAppStore = defineStore('app', () => {
         language: language.value,
         firstRun: firstRun.value,
         metadata: {
+          ...(configCache.value.metadata || {}),
+          sourceType: metadataSourceType.value,
+          version: metadataVersion.value,
           customBase: persistedCustomBase,
         }
       }
@@ -107,7 +112,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // 监听变更自动保存
-  watch([theme, background, language, metadataCustomBase, firstRun], () => {
+  watch([theme, background, language, metadataSourceType, metadataVersion, metadataCustomBase, firstRun], () => {
     void saveConfig()
   })
 
