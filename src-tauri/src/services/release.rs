@@ -21,6 +21,7 @@ pub async fn fetch_latest_release(client: &reqwest::Client) -> Result<LatestRele
         let resp = client
             .get(url)
             .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "endfield-cat/tauri")
             .send()
             .await
             .map_err(|e| FetchReleaseError { message: e.to_string(), status: None })?;
@@ -65,6 +66,34 @@ pub async fn fetch_latest_release(client: &reqwest::Client) -> Result<LatestRele
     let primary = "https://api.github.com/repos/BoxCatTeam/endfield-cat/releases/latest";
     match fetch(client, primary).await {
         Ok(res) => Ok(res),
+        Err(err) if matches!(err.status, Some(StatusCode::FORBIDDEN) | Some(StatusCode::TOO_MANY_REQUESTS)) => {
+            // Fallback: use jsDelivr to read package.json for version to avoid GitHub API limits
+            let fallback_url = "https://cdn.jsdelivr.net/gh/BoxCatTeam/endfield-cat@master/package.json";
+            let resp = client
+                .get(fallback_url)
+                .header("User-Agent", "endfield-cat/tauri")
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
+
+            if !resp.status().is_success() {
+                return Err(err.message);
+            }
+
+            let pkg: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+            if let Some(ver) = pkg.get("version").and_then(|v| v.as_str()) {
+                let tag_name = format!("v{}", ver);
+                return Ok(LatestRelease {
+                    tag_name,
+                    name: None,
+                    html_url: Some("https://github.com/BoxCatTeam/endfield-cat/releases".to_string()),
+                    download_url: None,
+                    body: None,
+                });
+            }
+
+            Err(err.message)
+        }
         Err(err) if err.status == Some(StatusCode::NOT_FOUND) => Err(err.message),
         Err(err) => Err(err.message),
     }

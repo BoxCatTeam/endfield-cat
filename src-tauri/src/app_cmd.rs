@@ -40,9 +40,9 @@ pub fn read_config() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-pub fn save_config(cfg: serde_json::Value) -> Result<(), String> {
+pub fn save_config(config: serde_json::Value) -> Result<(), String> {
     let exe_dir = exe_dir()?;
-    config::save_config(&exe_dir, cfg)
+    config::save_config(&exe_dir, config)
 }
 
 #[tauri::command]
