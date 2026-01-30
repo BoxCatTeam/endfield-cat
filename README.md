@@ -35,6 +35,18 @@
 
 > **注意**: 本项目目前处于积极开发阶段。
 
+## 📥 下载
+
+请前往 [GitHub Releases](https://github.com/BoxCatTeam/endfield-cat/releases) 页面下载最新版本安装包。
+
+## 🖥️ 支持平台
+
+| 平台 | 架构 | 状态 |
+| :--- | :--- | :--- |
+| **Windows** | x64 | ✅ 支持 |
+| **Linux** | x64 | 🚧 计划中 |
+| **macOS** | x64 | 🚧 计划中 |
+
 ## ✨ 功能特性
 
 - **📊 唤醒记录分析 (Gacha Analysis)**

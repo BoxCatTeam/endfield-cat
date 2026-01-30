@@ -33,6 +33,18 @@
 
 > **Note**: This project is currently in active development.
 
+## 📥 Download
+
+Please visit the [GitHub Releases](https://github.com/BoxCatTeam/endfield-cat/releases) page to download the latest installer.
+
+## 🖥️ Supported Platforms
+
+| Platform | Arch | Status |
+| :--- | :--- | :--- |
+| **Windows** | x64 | ✅ Supported |
+| **Linux** | x64 | 🚧 Coming Soon |
+| **macOS** | x64 | 🚧 Coming Soon |
+
 ## ✨ Features
 
 - **📊 Gacha Analysis**
