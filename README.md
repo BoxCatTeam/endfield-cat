@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./src/assets/icon.png" width="128" height="128" alt="EndCat Logo">
+  <img src="./src/assets/icon.webp" width="128" height="128" alt="EndCat Logo">
 </p>
 
 <h1 align="center">EndCat</h1>
