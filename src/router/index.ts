@@ -1,4 +1,4 @@
-import { createRouter, createWebHashHistory } from "vue-router";
+import { createRouter, createWebHashHistory } from 'vue-router'
 
 // import MainPage from "../pages/MainPage.vue";
 // import HomePage from "../pages/HomePage.vue";
@@ -10,22 +10,64 @@ export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     {
-      path: "/",
-      component: () => import("../pages/MainPage.vue"),
+      path: '/',
+      component: () => import('../pages/MainPage.vue'),
       children: [
-        { path: "", name: "home", component: () => import("../pages/HomePage.vue"), meta: { titleKey: "nav.home" } },
-        { path: "launcher", name: "launcher", component: () => import("../pages/LauncherPage.vue"), meta: { titleKey: "nav.launcher" } },
-        { path: "gacha", name: "gacha", component: () => import("../pages/GachaPage.vue"), meta: { titleKey: "nav.gacha" } },
-        { path: "settings", name: "settings", component: () => import("../pages/SettingsPage.vue"), meta: { titleKey: "nav.settings" } },
-      ],
+        {
+          path: '',
+          name: 'home',
+          component: () => import('../pages/HomePage.vue'),
+          meta: { titleKey: 'nav.home' }
+        },
+        {
+          path: 'launcher',
+          name: 'launcher',
+          component: () => import('../pages/LauncherPage.vue'),
+          meta: { titleKey: 'nav.launcher' }
+        },
+        {
+          path: 'gacha',
+          name: 'gacha',
+          component: () => import('../pages/GachaPage.vue'),
+          meta: { titleKey: 'nav.gacha' }
+        },
+        {
+          path: 'settings',
+          name: 'settings',
+          component: () => import('../pages/SettingsPage.vue'),
+          meta: { titleKey: 'nav.settings' }
+        }
+      ]
     },
     {
-      path: "/guide",
-      name: "guide",
-      component: () => import("../pages/GuidePage.vue"),
-      meta: { titleKey: "guide.title" }
-    },
-  ],
-});
+      path: '/guide',
+      component: () => import('../pages/GuidePage/Main.vue'),
+      redirect: '/guide/welcome',
+      meta: { titleKey: 'guide.title' },
+      children: [
+        {
+          path: 'welcome',
+          name: 'guide-welcome',
+          component: () => import('../pages/GuidePage/Welcome.vue')
+        },
+        {
+          path: 'disclaimer',
+          name: 'guide-disclaimer',
+          component: () => import('../pages/GuidePage/Disclaimer.vue')
+        },
+        {
+          path: 'resource',
+          name: 'guide-resource',
+          component: () => import('../pages/GuidePage/Resource.vue')
+        },
+        {
+          path: 'ready',
+          name: 'guide-ready',
+          component: () => import('../pages/GuidePage/Ready.vue')
+        }
+      ]
+    }
+  ]
+})
 
-export default router;
+export default router

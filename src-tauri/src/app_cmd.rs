@@ -5,11 +5,13 @@ use std::path::Path;
 use serde::{Serialize, Deserialize};
 
 // GitHub release 信息载体，仅挑选前端需要展示的字段
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct LatestRelease {
     pub tag_name: String,
     pub name: Option<String>,
     pub html_url: Option<String>,
+    pub download_url: Option<String>,
+    pub body: Option<String>,
 }
 
 #[tauri::command]
@@ -390,8 +392,23 @@ pub async fn fetch_latest_release(client: State<'_, reqwest::Client>) -> Result<
 
         let name = json.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
         let html_url = json.get("html_url").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let body = json.get("body").and_then(|v| v.as_str()).map(|s| s.to_string());
+        
+        // 从 assets 中找到 .exe 文件的下载链接
+        let download_url = json.get("assets")
+            .and_then(|v| v.as_array())
+            .and_then(|assets| {
+                assets.iter().find_map(|asset| {
+                    let name = asset.get("name").and_then(|v| v.as_str())?;
+                    if name.ends_with(".exe") {
+                        asset.get("browser_download_url").and_then(|v| v.as_str()).map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                })
+            });
 
-        Ok(LatestRelease { tag_name, name, html_url })
+        Ok(LatestRelease { tag_name, name, html_url, download_url, body })
     }
 
     let primary = "https://api.github.com/repos/BoxCatTeam/endfield-cat/releases/latest";
@@ -401,3 +418,132 @@ pub async fn fetch_latest_release(client: State<'_, reqwest::Client>) -> Result<
         Err(err) => Err(err.message),
     }
 }
+
+#[derive(Clone, Serialize)]
+pub struct UpdateProgress {
+    pub stage: String,
+    pub progress: u32,
+}
+
+#[tauri::command]
+pub async fn download_and_apply_update(
+    window: tauri::Window,
+    app: AppHandle,
+    client: State<'_, reqwest::Client>,
+    download_url: String,
+) -> Result<(), String> {
+    use std::io::Write;
+    use futures_util::StreamExt;
+    
+    // 发送进度事件
+    let emit_progress = |stage: &str, progress: u32| {
+        let _ = window.emit("update-progress", UpdateProgress {
+            stage: stage.to_string(),
+            progress,
+        });
+    };
+    
+    emit_progress("downloading", 0);
+    
+    // 获取当前 exe 路径
+    let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let exe_dir = current_exe.parent().ok_or("Cannot get exe directory")?;
+    let exe_name = current_exe.file_name().ok_or("Cannot get exe name")?;
+    
+    // 下载新版本到临时目录
+    let temp_dir = std::env::temp_dir().join("endfield-cat-update");
+    if temp_dir.exists() {
+        fs::remove_dir_all(&temp_dir).map_err(|e| e.to_string())?;
+    }
+    fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
+    
+    let new_exe_path = temp_dir.join(exe_name);
+    
+    // 下载文件
+    let resp = client
+        .get(&download_url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    if !resp.status().is_success() {
+        return Err(format!("Download failed: HTTP {}", resp.status()));
+    }
+    
+    let total_size = resp.content_length().unwrap_or(0);
+    let mut downloaded: u64 = 0;
+    
+    let mut file = fs::File::create(&new_exe_path).map_err(|e| e.to_string())?;
+    let mut stream = resp.bytes_stream();
+    
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| e.to_string())?;
+        file.write_all(&chunk).map_err(|e| e.to_string())?;
+        downloaded += chunk.len() as u64;
+        
+        if total_size > 0 {
+            let progress = ((downloaded as f64 / total_size as f64) * 100.0) as u32;
+            emit_progress("downloading", progress);
+        }
+    }
+    
+    emit_progress("preparing", 100);
+    
+    // 创建更新脚本
+    let batch_path = temp_dir.join("updater.bat");
+    let current_exe_str = current_exe.to_string_lossy();
+    let new_exe_str = new_exe_path.to_string_lossy();
+    let exe_dir_str = exe_dir.to_string_lossy();
+    
+    let batch_content = format!(
+        r#"@echo off
+chcp 65001 >nul
+echo 正在更新 endfield-cat...
+echo Updating endfield-cat...
+
+:wait_loop
+tasklist /FI "IMAGENAME eq {exe_name}" 2>NUL | find /I "{exe_name}" >NUL
+if "%ERRORLEVEL%"=="0" (
+    timeout /t 1 /nobreak >nul
+    goto wait_loop
+)
+
+echo 正在替换文件...
+copy /Y "{new_exe}" "{current_exe}"
+if errorlevel 1 (
+    echo 更新失败，请手动替换文件
+    pause
+    exit /b 1
+)
+
+echo 启动新版本...
+start "" "{current_exe}"
+
+echo 清理临时文件...
+rd /s /q "{temp_dir}"
+
+exit
+"#,
+        exe_name = exe_name.to_string_lossy(),
+        new_exe = new_exe_str,
+        current_exe = current_exe_str,
+        temp_dir = temp_dir.to_string_lossy()
+    );
+    
+    fs::write(&batch_path, batch_content).map_err(|e| e.to_string())?;
+    
+    emit_progress("installing", 100);
+    
+    // 启动更新脚本并退出应用
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", &batch_path.to_string_lossy()])
+        .current_dir(&exe_dir_str.to_string())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    
+    // 退出应用
+    app.exit(0);
+    
+    Ok(())
+}
+

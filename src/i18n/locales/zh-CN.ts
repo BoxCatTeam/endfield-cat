@@ -4,6 +4,7 @@ export default {
         notAvailable: "开发中暂不可用",
         clickTip: "点击了: {label}",
         retry: "重试",
+        next: "下一步",
         disclaimer: {
             title: "免责声明",
             items: [
@@ -20,9 +21,12 @@ export default {
         welcomeIntro1: "EndCat 能帮助您轻松管理游戏数据与记录。",
         welcomeIntro2: "只需几步简单配置，即可开始使用。",
         startSetup: "开始配置",
+        selectLanguage: "选择语言",
         stepWelcome: "欢迎",
+        stepDisclaimer: "声明",
         stepResource: "资源",
         stepFinish: "完成",
+        agreeAndContinue: "同意并继续",
         resourceTitle: "资源初始化",
         checkingEnv: "正在检查环境...",
         missingTitle: "缺少必要的元数据文件",
@@ -78,7 +82,15 @@ export default {
             found: "发现新版本：{version}",
             upToDate: "已经是最新版本",
             failed: "检查更新失败",
-            view: "查看发布页"
+            view: "查看发布页",
+            available: "有新版本可用",
+            downloading: "正在下载更新...",
+            downloadProgress: "下载进度: {progress}%",
+            preparing: "准备安装...",
+            installNow: "立即更新",
+            manualDownload: "手动下载",
+            later: "稍后",
+            installFailed: "更新安装失败"
         },
         metadata: {
             title: "元数据",

@@ -6,7 +6,7 @@ const METADATA_CDN_TEMPLATE = 'https://cdn.jsdelivr.net/gh/BoxCatTeam/endfield-c
 const METADATA_MIRROR_TEMPLATE = 'https://cdn.jsdmirror.com/gh/BoxCatTeam/endfield-cat-metadata@v{version}/'
 const DEFAULT_METADATA_VERSION = 'latest'
 
-type MetadataSourceType = 'cdn' | 'mirror' | 'custom'
+export type MetadataSourceType = 'cdn' | 'mirror' | 'custom'
 type RemoteManifest = {
   packageVersion?: string
   metadataChecksum?: string
@@ -39,16 +39,24 @@ export const useAppStore = defineStore('app', () => {
     return metadataStatus.value.isEmpty || !metadataStatus.value.hasManifest
   })
 
-  const metadataBaseUrl = computed(() => {
-    if (metadataSourceType.value === 'custom') {
-      return metadataCustomBase.value.trim()
+  const normalizeBaseUrl = (baseUrl: string) => {
+    const trimmed = baseUrl.trim()
+    if (!trimmed) return ''
+    return trimmed.endsWith('/') ? trimmed : `${trimmed}/`
+  }
+
+  const getMetadataBaseUrlFor = (sourceType: MetadataSourceType, customBase?: string) => {
+    if (sourceType === 'custom') {
+      return normalizeBaseUrl(customBase ?? metadataCustomBase.value)
     }
     const version = metadataVersion.value.trim() || DEFAULT_METADATA_VERSION
-    if (metadataSourceType.value === 'mirror') {
+    if (sourceType === 'mirror') {
       return METADATA_MIRROR_TEMPLATE.replace('{version}', version)
     }
     return METADATA_CDN_TEMPLATE.replace('{version}', version)
-  })
+  }
+
+  const metadataBaseUrl = computed(() => getMetadataBaseUrlFor(metadataSourceType.value))
 
   const firstRun = ref(true)
 
@@ -65,8 +73,7 @@ export const useAppStore = defineStore('app', () => {
       if (config?.firstRun !== undefined) firstRun.value = config.firstRun
 
       const metadata = (config?.metadata as Record<string, any>) || {}
-      if (metadata.sourceType) metadataSourceType.value = metadata.sourceType as MetadataSourceType
-      if (metadata.version) metadataVersion.value = metadata.version
+      // baseUrl is hard-coded in app; only persist customBase.
       if (metadata.customBase) metadataCustomBase.value = metadata.customBase
 
       isLoaded.value = true
@@ -81,7 +88,7 @@ export const useAppStore = defineStore('app', () => {
     if (!isLoaded.value) return
 
     try {
-      const trimmedCustomBase = metadataCustomBase.value.trim()
+      const persistedCustomBase = normalizeBaseUrl(metadataCustomBase.value)
       const nextConfig = {
         ...configCache.value,
         theme: theme.value,
@@ -89,10 +96,7 @@ export const useAppStore = defineStore('app', () => {
         language: language.value,
         firstRun: firstRun.value,
         metadata: {
-          sourceType: metadataSourceType.value,
-          version: metadataVersion.value,
-          customBase: trimmedCustomBase,
-          baseUrl: metadataBaseUrl.value,
+          customBase: persistedCustomBase,
         }
       }
       configCache.value = nextConfig
@@ -103,7 +107,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // Watch for changes and save
-  watch([theme, background, language, metadataSourceType, metadataVersion, metadataCustomBase, firstRun], () => {
+  watch([theme, background, language, metadataCustomBase, firstRun], () => {
     void saveConfig()
   })
 
@@ -143,6 +147,7 @@ export const useAppStore = defineStore('app', () => {
     metadataVersion,
     metadataCustomBase,
     metadataBaseUrl,
+    getMetadataBaseUrlFor,
     metadataStatus,
     metadataNeedCheck,
     checkMetadata,

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { invoke } from '@tauri-apps/api/core'
 import { Snackbar } from '@varlet/ui'
 import { useI18n } from 'vue-i18n'
 import logo from '../assets/icon.webp'
 import { useAppStore } from '../stores/app'
+import type { MetadataSourceType } from '../stores/app'
 
 const { t, tm } = useI18n()
 const disclaimerItems = computed(() => tm('common.disclaimer.items') as string[])
@@ -24,6 +25,8 @@ onMounted(async () => {
     console.error('Failed to get version:', error)
     appVersion.value = 'Unknown'
   }
+
+  void testAllConnections()
 })
 
 // Bind to store
@@ -58,6 +61,67 @@ const metadataCustomBase = computed({
 })
 
 const metadataBaseUrl = computed(() => appStore.metadataBaseUrl)
+
+type ConnectivityState = {
+  status: 'idle' | 'testing' | 'success' | 'failed'
+  latency: number
+  error: string
+}
+
+const connectivity = ref<Record<MetadataSourceType, ConnectivityState>>({
+  cdn: { status: 'idle', latency: 0, error: '' },
+  mirror: { status: 'idle', latency: 0, error: '' },
+  custom: { status: 'idle', latency: 0, error: '' },
+})
+
+const anyTesting = computed(() => {
+  return Object.values(connectivity.value).some((s) => s.status === 'testing')
+})
+
+const getBaseUrlFor = (source: MetadataSourceType) => {
+  return appStore.getMetadataBaseUrlFor(source, metadataCustomBase.value)
+}
+
+const testSourceConnection = async (source: MetadataSourceType) => {
+  const baseUrl = getBaseUrlFor(source)
+  if (!baseUrl) {
+    connectivity.value[source] = { status: 'idle', latency: 0, error: '' }
+    return
+  }
+
+  connectivity.value[source] = { status: 'testing', latency: 0, error: '' }
+  const start = performance.now()
+  try {
+    await invoke('fetch_metadata_manifest', {
+      baseUrl,
+      version: metadataVersion.value
+    })
+    connectivity.value[source] = {
+      status: 'success',
+      latency: Math.round(performance.now() - start),
+      error: ''
+    }
+  } catch (e: any) {
+    console.error(e)
+    connectivity.value[source] = {
+      status: 'failed',
+      latency: 0,
+      error: typeof e === 'string' ? e : t('guide.connectionFailed')
+    }
+  }
+}
+
+const testAllConnections = async () => {
+  for (const s of ['cdn', 'mirror', 'custom'] as const) {
+    // eslint-disable-next-line no-await-in-loop
+    await testSourceConnection(s)
+  }
+}
+
+const selectSource = async (source: MetadataSourceType) => {
+  metadataSourceType.value = source
+  await testSourceConnection(source)
+}
 
 const gamePath = ref('')
 
@@ -152,11 +216,17 @@ const langOptions = computed(() => [
   { label: t('settings.langEn'), value: 'en-US' },
 ])
 
-const metadataSourceOptions = computed(() => [
-  { label: t('settings.metadata.sourceCdn'), value: 'cdn' },
-  { label: t('settings.metadata.sourceMirror'), value: 'mirror' },
-  { label: t('settings.metadata.sourceCustom'), value: 'custom' },
-])
+watch(metadataVersion, () => {
+  connectivity.value = {
+    cdn: { status: 'idle', latency: 0, error: '' },
+    mirror: { status: 'idle', latency: 0, error: '' },
+    custom: { status: 'idle', latency: 0, error: '' },
+  }
+})
+
+watch(metadataCustomBase, () => {
+  connectivity.value.custom = { status: 'idle', latency: 0, error: '' }
+})
 
 const resetMetadataLoading = ref(false)
 
@@ -361,34 +431,67 @@ const notAvailable = () => {
                   <div class="cell-desc">{{ t('settings.metadata.sourceDesc') }}</div>
                 </template>
                 <template #extra>
-                  <var-select v-model="metadataSourceType" size="small" variant="outlined" class="select-list-source">
-                    <var-option v-for="opt in metadataSourceOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
-                  </var-select>
+                  <var-button text type="primary" size="small" :disabled="anyTesting" @click="testAllConnections">{{ t('common.retry') }}</var-button>
                 </template>
               </var-cell>
 
-              <var-cell>
+              <var-cell
+                v-for="src in (['cdn', 'mirror', 'custom'] as const)"
+                :key="src"
+                ripple
+                @click="selectSource(src)"
+              >
                 <template #icon>
                   <var-icon name="server" size="24px" class="section-icon" />
                 </template>
                 <template #default>
-                  <div class="cell-title">{{ t('settings.metadata.basePreview') }}</div>
+                  <div class="cell-title">
+                    <span v-if="src === 'cdn'">{{ t('settings.metadata.sourceCdn') }}</span>
+                    <span v-else-if="src === 'mirror'">{{ t('settings.metadata.sourceMirror') }}</span>
+                    <span v-else>{{ t('settings.metadata.sourceCustom') }}</span>
+                  </div>
                 </template>
                 <template #description>
-                   <!-- Show desc only if custom, or maybe generic desc? User said 'display box' otherwise. -->
-                   <div v-if="metadataSourceType !== 'custom'" class="metadata-url">{{ metadataBaseUrl }}</div>
-                   <div v-else class="cell-desc">{{ t('settings.metadata.customDesc') }}</div>
+                  <div v-if="src === 'custom'" class="metadata-url">{{ getBaseUrlFor(src) || t('settings.metadata.customPlaceholder') }}</div>
+                  <div class="metadata-conn">
+                    <span class="metadata-conn-label">{{ t('guide.connectivity') }}</span>
+                    <span v-if="connectivity[src].status === 'testing'" class="metadata-conn-testing">
+                      <var-loading type="cube" size="small" :radius="2" class="metadata-conn-loading" /> {{ t('guide.testing') }}
+                    </span>
+                    <span v-else-if="connectivity[src].status === 'success'" class="metadata-conn-success">
+                      <var-icon name="check-circle-outline" size="14" /> {{ connectivity[src].latency }}ms
+                    </span>
+                    <span v-else-if="connectivity[src].status === 'failed'" class="metadata-conn-failed">
+                      <var-icon name="close-circle-outline" size="14" /> {{ connectivity[src].error }}
+                    </span>
+                    <span v-else class="metadata-conn-idle">--</span>
+                  </div>
+                </template>
+                <template #extra>
+                  <var-icon v-if="metadataSourceType === src" name="check" />
+                </template>
+              </var-cell>
+            </var-paper>
+
+            <var-paper v-if="metadataSourceType === 'custom'" :elevation="false" radius="12">
+              <var-cell>
+                <template #icon>
+                  <var-icon name="link-variant" size="24px" class="section-icon" />
+                </template>
+                <template #default>
+                  <div class="cell-title">{{ t('settings.metadata.sourceCustom') }}</div>
+                </template>
+                <template #description>
+                  <div class="cell-desc">{{ t('settings.metadata.customDesc') }}</div>
                 </template>
                 <template #extra>
                   <var-input
-                    v-if="metadataSourceType === 'custom'"
                     v-model="metadataCustomBase"
                     size="small"
                     variant="outlined"
                     class="metadata-input"
                     :placeholder="t('settings.metadata.customPlaceholder')"
                   />
-                  <!-- If not custom, we rely on the description slot to show the URL text, extra slot is empty or could duplicate? User said 'becomes input box, otherwise is display box'. Displaying as text in description is cleaner for long URLs than fitting in 'extra'. -->
                 </template>
               </var-cell>
             </var-paper>
@@ -552,8 +655,54 @@ const notAvailable = () => {
   width: 220px;
 }
 
-.select-list-source {
-  width: 180px;
+.metadata-conn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.metadata-conn-label {
+  opacity: 0.75;
+}
+
+.metadata-conn-idle {
+  opacity: 0.6;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.metadata-conn-loading {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.metadata-conn-success {
+  color: var(--color-success);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.metadata-conn-failed {
+  color: var(--color-danger);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metadata-conn-testing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
 }
 
 .disclaimer-block {

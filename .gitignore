@@ -39,3 +39,7 @@ Thumbs.db
 
 
 endfield-cat-metadata
+
+# Local TLS certs (self-signed)
+/certs/*
+scripts

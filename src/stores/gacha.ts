@@ -10,6 +10,9 @@ import i18n from "../i18n";
 
 const { t } = i18n.global;
 
+type LocaleItem = { itemid?: string; name?: string };
+type LocaleNameMaps = { character: Map<string, string>; weapon: Map<string, string> };
+
 // Types
 export type SelectOption = { label: string; value: string };
 
@@ -38,6 +41,23 @@ type WeaponPool = {
 };
 
 type IconGetter = (rec: GachaRecord) => string | undefined;
+
+function normalizeLangTag(lang: string | undefined | null) {
+    const raw = (lang || "").trim();
+    if (!raw) return "zh-CN";
+    const normalized = raw.replace("_", "-");
+    const parts = normalized.split("-");
+    if (parts.length === 1) return parts[0];
+    const language = parts[0].toLowerCase();
+    const region = parts[1].toUpperCase();
+    return `${language}-${region}`;
+}
+
+function isWeapon(rec: { pool_type?: string; pool_name?: string }) {
+    const poolType = rec.pool_type || "";
+    const poolName = rec.pool_name || "";
+    return poolType.includes("Weapon") || poolName.includes("武器");
+}
 
 // Helpers are moved outside to keep store clean
 function sum(stats: BannerStats) {
@@ -256,6 +276,66 @@ export const useGachaStore = defineStore("gacha", () => {
         return metadataDirPromise;
     }
 
+    const localeMapsCache = new Map<string, Promise<LocaleNameMaps>>();
+    async function fetchLocaleList(baseDir: string, lang: string, fileNames: string[]) {
+        const tryDirs = [
+            `${baseDir}/locale/${lang}`,
+        ];
+        for (const dir of tryDirs) {
+            for (const fileName of fileNames) {
+                const fullPath = `${dir}/${fileName}`;
+                try {
+                    const url = convertFileSrc(fullPath);
+                    const res = await fetch(url);
+                    if (!res.ok) continue;
+                    const json = (await res.json()) as unknown;
+                    if (Array.isArray(json)) return json as LocaleItem[];
+                } catch (e) {
+                    // ignore and try next
+                }
+            }
+        }
+        return null;
+    }
+
+    async function ensureLocaleMaps(): Promise<LocaleNameMaps> {
+        await ensureMetadataDir();
+        const baseDir = metadataDir.value;
+        const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in (window as any);
+        if (!baseDir || !isTauri) {
+            return { character: new Map(), weapon: new Map() };
+        }
+
+        const lang = normalizeLangTag(i18n.global.locale.value);
+        const cacheKey = `${baseDir}::${lang}`;
+        if (localeMapsCache.has(cacheKey)) return localeMapsCache.get(cacheKey)!;
+
+        const promise = (async () => {
+            const fallbackLang = "zh-CN";
+            const characterNames =
+                (await fetchLocaleList(baseDir, lang, ["character.json", "charater.json"])) ||
+                (lang !== fallbackLang ? await fetchLocaleList(baseDir, fallbackLang, ["character.json", "charater.json"]) : null) ||
+                [];
+            const weaponNames =
+                (await fetchLocaleList(baseDir, lang, ["weapon.json"])) ||
+                (lang !== fallbackLang ? await fetchLocaleList(baseDir, fallbackLang, ["weapon.json"]) : null) ||
+                [];
+
+            const character = new Map<string, string>();
+            const weapon = new Map<string, string>();
+            for (const item of characterNames) {
+                if (item?.itemid && item?.name) character.set(item.itemid, item.name);
+            }
+            for (const item of weaponNames) {
+                if (item?.itemid && item?.name) weapon.set(item.itemid, item.name);
+            }
+            return { character, weapon };
+        })();
+
+        localeMapsCache.set(cacheKey, promise);
+        return promise;
+    }
+
     // Actions
     async function loadFromDb(targetUid: string) {
         if (!isSqliteAvailable() || !targetUid) return;
@@ -264,10 +344,11 @@ export const useGachaStore = defineStore("gacha", () => {
             const baseDir = metadataDir.value;
             const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in (window as any);
             const iconCache = new Map<string, string | undefined>();
+            const localeMaps = await ensureLocaleMaps();
             const iconGetter: IconGetter | undefined = baseDir && isTauri
                 ? (rec) => {
                     if (!rec.item_id) return undefined;
-                    const category = rec.pool_type.includes("Weapon") || rec.pool_name.includes("武器") ? "weapon" : "character";
+                    const category = isWeapon(rec) ? "weapon" : "character";
                     const key = `${category}:${rec.item_id}`;
                     if (iconCache.has(key)) return iconCache.get(key);
                     const fullPath = `${baseDir}/images/icon/${category}/${rec.item_id}.png`;
@@ -285,7 +366,14 @@ export const useGachaStore = defineStore("gacha", () => {
 
             const pulls = await listGachaPulls(targetUid, 10000);
             const records: GachaRecord[] = pulls.map((p) => ({
-                name: p.itemName,
+                name: (() => {
+                    const id = p.itemId || "";
+                    if (!id) return p.itemName;
+                    const localized = isWeapon({ pool_type: p.poolType || "", pool_name: p.bannerName || "" })
+                        ? localeMaps.weapon.get(id)
+                        : localeMaps.character.get(id);
+                    return localized || p.itemName || id;
+                })(),
                 item_id: p.itemId || "",
                 rarity: p.rarity,
                 pool_id: p.bannerId,
@@ -373,6 +461,11 @@ export const useGachaStore = defineStore("gacha", () => {
         } else {
             banners.value = [];
         }
+    });
+
+    watch(() => i18n.global.locale.value, () => {
+        localeMapsCache.clear();
+        if (uid.value) void loadFromDb(uid.value);
     });
 
     async function reloadAccounts(preferUid?: string) {

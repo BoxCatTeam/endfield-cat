@@ -16,11 +16,15 @@ declare module 'vue' {
     DonutChart: typeof import('./src/components/charts/DonutChart.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    StepReady: typeof import('./src/components/GuidePage/StepReady.vue')['default']
+    StepResource: typeof import('./src/components/GuidePage/StepResource.vue')['default']
+    StepWelcome: typeof import('./src/components/GuidePage/StepWelcome.vue')['default']
     TitleBar: typeof import('./src/components/TitleBar.vue')['default']
     VarAvatar: typeof import('@varlet/ui')['_AvatarComponent']
     VarButton: typeof import('@varlet/ui')['_ButtonComponent']
     VarCard: typeof import('@varlet/ui')['_CardComponent']
     VarCell: typeof import('@varlet/ui')['_CellComponent']
+    VarCheckbox: typeof import('@varlet/ui')['_CheckboxComponent']
     VarChip: typeof import('@varlet/ui')['_ChipComponent']
     VarCollapse: typeof import('@varlet/ui')['_CollapseComponent']
     VarCollapseItem: typeof import('@varlet/ui')['_CollapseItemComponent']
@@ -37,5 +41,8 @@ declare module 'vue' {
     VarSpace: typeof import('@varlet/ui')['_SpaceComponent']
     VarStep: typeof import('@varlet/ui')['_StepComponent']
     VarSteps: typeof import('@varlet/ui')['_StepsComponent']
+  }
+  export interface GlobalDirectives {
+    vRipple: typeof import('@varlet/ui')['_RippleComponent']
   }
 }

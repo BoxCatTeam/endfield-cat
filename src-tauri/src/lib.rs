@@ -42,6 +42,7 @@ pub fn run() {
             app_cmd::fetch_metadata_manifest,
             app_cmd::check_metadata,
             app_cmd::fetch_latest_release,
+            app_cmd::download_and_apply_update,
             hg_api::auth::hg_exchange_user_token,
             hg_api::auth::hg_u8_token_by_uid,
             hg_api::gacha::hg_fetch_char_records,
