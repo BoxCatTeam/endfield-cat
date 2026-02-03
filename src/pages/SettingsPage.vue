@@ -200,6 +200,24 @@ watch(metadataCustomBase, () => {
 })
 
 const resetMetadataLoading = ref(false)
+const checkingMetadataUpdate = ref(false)
+
+const metadataCurrentVersion = computed(() => appStore.metadataStatus?.currentVersion || t('common.unknown'))
+const isMetadataOutdated = computed(() => appStore.isMetadataOutdated)
+const remoteVersion = computed(() => appStore.metadataStatus?.remote?.packageVersion)
+
+const checkMetadataUpdate = async () => {
+    checkingMetadataUpdate.value = true
+    try {
+        await appStore.checkMetadata()
+        Snackbar.success(t('settings.metadata.checkSuccess'))
+    } catch (error) {
+        console.error('Failed to check metadata update:', error)
+        Snackbar.error(t('settings.metadata.checkFailed'))
+    } finally {
+        checkingMetadataUpdate.value = false
+    }
+}
 
 const resetMetadata = async () => {
   resetMetadataLoading.value = true
@@ -208,6 +226,8 @@ const resetMetadata = async () => {
       baseUrl: metadataBaseUrl.value,
       version: metadataVersion.value
     })
+    // 重新检查以更新状态
+    await appStore.checkMetadata()
     Snackbar.success(t('settings.metadata.resetSuccess'))
   } catch (error) {
     console.error('Failed to reset metadata:', error)
@@ -398,6 +418,47 @@ const notAvailable = () => {
         <section>
           <div class="section-title">{{ t('settings.metadata.title') }}</div>
           <var-space direction="column" size="small">
+            <var-paper :elevation="false" radius="12">
+              <var-cell>
+                <template #icon>
+                  <var-icon name="update" size="24px" class="section-icon" />
+                </template>
+                <template #default>
+                  <div class="cell-title">{{ t('settings.metadata.update') }}</div>
+                </template>
+                <template #description>
+                  <div class="cell-desc">{{ t('settings.metadata.currentVersion') }}: {{ metadataCurrentVersion }}</div>
+                  <div v-if="isMetadataOutdated && remoteVersion" class="cell-desc" style="color: var(--color-warning);">
+                      {{ t('settings.metadata.newVersionAvailable', { version: remoteVersion }) }}
+                  </div>
+                </template>
+                <template #extra>
+                   <var-space :size="8">
+                       <var-button
+                        type="primary"
+                        size="small"
+                        variant="text"
+                        :loading="checkingMetadataUpdate"
+                        :elevation="false"
+                        @click="checkMetadataUpdate"
+                      >
+                        {{ t('settings.checkUpdate') }}
+                      </var-button>
+                      <var-button
+                        v-if="isMetadataOutdated"
+                        type="primary"
+                        size="small"
+                        :elevation="false"
+                        :loading="resetMetadataLoading"
+                        @click="resetMetadata"
+                      >
+                        {{ t('settings.update.action') }}
+                      </var-button>
+                   </var-space>
+                </template>
+              </var-cell>
+            </var-paper>
+
             <var-paper :elevation="false" radius="12">
               <var-cell>
                 <template #icon>

@@ -58,6 +58,11 @@ export const router = createRouter({
           path: 'ready',
           name: 'guide-ready',
           component: () => import('../pages/GuidePage/Ready.vue')
+        },
+        {
+          path: 'update',
+          name: 'guide-update',
+          component: () => import('../pages/GuidePage/Update.vue')
         }
       ]
     }

@@ -5,6 +5,7 @@ export default {
         clickTip: "点击了: {label}",
         retry: "重试",
         next: "下一步",
+        unknown: "未知",
         disclaimer: {
             title: "免责声明",
             items: [
@@ -39,6 +40,15 @@ export default {
         testing: "测试中...",
         download: "一键下载与初始化",
         customSettings: "自定义数据源设置",
+        postUpdateTitle: "版本更新完成，需同步数据",
+        postUpdateSubtitle: "为避免资源缺失，请先完成数据更新",
+        postUpdateDataTitle: "元数据版本",
+        postUpdateDesc: "同步元数据可确保新版本正常显示图标与文本，推荐在稳定网络下完成。",
+        postUpdateAction: "立即更新数据",
+        postUpdateSkip: "稍后处理",
+        postUpdateRetry: "重新检查",
+        postUpdateSuccess: "数据更新完成",
+        postUpdateFailed: "数据更新失败，请重试",
         readyTitle: "一切准备就绪",
         readySubtitle: "配置已完成，欢迎加入！",
         enterApp: "进入 EndCat",
@@ -83,6 +93,8 @@ export default {
             latestUnknown: "最新版本未知",
             found: "发现新版本：{version}",
             upToDate: "已经是最新版本",
+            alreadyLatest: "已经是最新版本",
+            checkFailed: "检查更新失败",
             failed: "检查更新失败",
             view: "查看发布页",
             available: "有新版本可用",
@@ -92,7 +104,8 @@ export default {
             installNow: "立即更新",
             manualDownload: "手动下载",
             later: "稍后",
-            installFailed: "更新安装失败"
+            installFailed: "更新安装失败",
+            action: "立即更新"
         },
         metadata: {
             title: "元数据",
@@ -107,7 +120,12 @@ export default {
             reset: "重置元数据",
             resetDesc: "清空已下载的 metadata 与图标，重新拉取",
             resetSuccess: "本地元数据已重置",
-            resetFailed: "重置失败，请重试"
+            resetFailed: "重置失败，请重试",
+            update: "版本更新",
+            currentVersion: "当前版本",
+            newVersionAvailable: "新版本可用：{version}",
+            checkSuccess: "检查完成",
+            checkFailed: "检查失败，请重试"
         },
         buttons: {
             github: "GitHub",
@@ -159,7 +177,7 @@ export default {
             beginnerTitle: "启程寻访",
             specialTitle: "角色活动",
             standardTitle: "标准寻访",
-            weaponTitle: "武器：{name}",
+            weaponTitle: "武器申领",
             weaponUnknown: "未知武器池",
             topLabel: "六星记录"
         },

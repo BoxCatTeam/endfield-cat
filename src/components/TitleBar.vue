@@ -3,6 +3,8 @@ import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { quitApp } from "../api/tauriCommands";
+import logo from "../assets/icon.webp"
+
 const route = useRoute();
 
 const title = computed(() => (route.meta?.title as string | undefined) ?? "");
@@ -43,10 +45,11 @@ async function windowAction(action: "minimize" | "toggleMaximize" | "close") {
 
 <template>
   <header class="titlebar" data-tauri-drag-region @pointerdown="tryStartDragging">
-    <div class="left">
+    <var-space align="center" justify="center">
+      <var-avatar :src="logo" :size="32"/>
       <div class="brand">EndCat</div>
       <div class="title">{{ title }}</div>
-    </div>
+    </var-space>
 
     <div class="spacer" />
 
@@ -82,8 +85,6 @@ async function windowAction(action: "minimize" | "toggleMaximize" | "close") {
 }
 
 .left {
-  display: flex;
-  align-items: baseline;
   gap: 10px;
   min-width: 0;
 }

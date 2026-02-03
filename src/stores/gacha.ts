@@ -12,6 +12,14 @@ const { t } = i18n.global;
 
 type LocaleItem = { itemid?: string; name?: string };
 type LocaleNameMaps = { character: Map<string, string>; weapon: Map<string, string> };
+type GachaPoolEntry = {
+    poolId?: string;
+    poolName?: string;
+    gacha_type?: string;
+    start_time?: number | null;
+    end_time?: number | null;
+    up?: string[];
+};
 
 // 类型定义
 export type SelectOption = { label: string; value: string };
@@ -41,6 +49,16 @@ type WeaponPool = {
 };
 
 type IconGetter = (rec: GachaRecord) => string | undefined;
+type FeaturedChecker = (rec: GachaRecord) => boolean;
+type TopHistoryItem = { name: string; count: number; rarity: 6 | 5 | 4 | 3; icon?: string; featured?: boolean };
+
+function normalizeTimestampMs(v: number | null | undefined) {
+    if (v === null || v === undefined) return null;
+    const n = Number(v);
+    if (!Number.isFinite(n)) return null;
+    // 小于 1e12 视为秒级时间戳
+    return n < 1e12 ? Math.round(n * 1000) : Math.round(n);
+}
 
 function normalizeLangTag(lang: string | undefined | null) {
     const raw = (lang || "").trim();
@@ -64,15 +82,16 @@ function sum(stats: BannerStats) {
     return stats.s6 + stats.s5 + stats.s4 + stats.s3;
 }
 
-function getHistory(records: GachaRecord[], limit = 50, iconGetter?: IconGetter) {
+function getHistory(records: GachaRecord[], limit = 50, iconGetter?: IconGetter, featuredChecker?: FeaturedChecker): TopHistoryItem[] {
     const sorted = [...records].reverse();
-    const history: Array<{ name: string; count: number; rarity: 6 | 5 | 4 | 3; icon?: string }> = [];
+    const history: TopHistoryItem[] = [];
     let pity = 0;
     for (const rec of sorted) {
         pity++;
         if (rec.rarity === 6) {
             const icon = iconGetter?.(rec);
-            history.push({ name: rec.name, count: pity, rarity: 6, icon });
+            const featured = featuredChecker?.(rec) ?? false;
+            history.push({ name: rec.name, count: pity, rarity: 6, icon, featured });
             pity = 0;
         }
     }
@@ -160,7 +179,7 @@ function formatRange(records: GachaRecord[]) {
     return times.length === 1 ? fmt(times[0]) : `${fmt(times[0])} - ${fmt(times[times.length - 1])}`;
 }
 
-function generateBanners(charBeginner: GachaRecord[], charSpecial: GachaRecord[], charStandard: GachaRecord[], weaponPools: Map<string, GachaRecord[]>, iconGetter?: IconGetter): BannerItem[] {
+function generateBanners(charBeginner: GachaRecord[], charSpecial: GachaRecord[], charStandard: GachaRecord[], weaponPools: Map<string, GachaRecord[]>, iconGetter?: IconGetter, featuredChecker?: FeaturedChecker): BannerItem[] {
     const nextBanners: BannerItem[] = [];
 
     if (charBeginner.length) {
@@ -175,7 +194,7 @@ function generateBanners(charBeginner: GachaRecord[], charSpecial: GachaRecord[]
             avg6: stat.avg6,
             min6: stat.min6,
             max6: stat.max6,
-            top: getHistory(charBeginner, 50, iconGetter),
+            top: getHistory(charBeginner, 50, iconGetter, featuredChecker),
         });
     }
 
@@ -191,7 +210,7 @@ function generateBanners(charBeginner: GachaRecord[], charSpecial: GachaRecord[]
             avg6: stat.avg6,
             min6: stat.min6,
             max6: stat.max6,
-            top: getHistory(charSpecial, 50, iconGetter),
+            top: getHistory(charSpecial, 50, iconGetter, featuredChecker),
         });
     }
 
@@ -207,7 +226,7 @@ function generateBanners(charBeginner: GachaRecord[], charSpecial: GachaRecord[]
             avg6: stat.avg6,
             min6: stat.min6,
             max6: stat.max6,
-            top: getHistory(charStandard, 50, iconGetter),
+            top: getHistory(charStandard, 50, iconGetter, featuredChecker),
         });
     }
 
@@ -226,7 +245,7 @@ function generateBanners(charBeginner: GachaRecord[], charSpecial: GachaRecord[]
             avg6: stat.avg6,
             min6: stat.min6,
             max6: stat.max6,
-            top: getHistory(records, 50, iconGetter),
+            top: getHistory(records, 50, iconGetter, featuredChecker),
         });
     }
 
@@ -276,6 +295,7 @@ export const useGachaStore = defineStore("gacha", () => {
     }
 
     const localeMapsCache = new Map<string, Promise<LocaleNameMaps>>();
+    const gachaPoolCache = new Map<string, Promise<GachaPoolEntry[]>>();
     async function fetchLocaleList(baseDir: string, lang: string, fileNames: string[]) {
         const tryDirs = [
             `${baseDir}/locale/${lang}`,
@@ -335,6 +355,77 @@ export const useGachaStore = defineStore("gacha", () => {
         return promise;
     }
 
+    async function loadGachaPools(baseDir: string, lang: string): Promise<GachaPoolEntry[]> {
+        const cacheKey = `${baseDir}::${lang}`;
+        if (gachaPoolCache.has(cacheKey)) return gachaPoolCache.get(cacheKey)!;
+
+        const promise = (async () => {
+            const tryLangs = [lang];
+            if (lang !== "zh-CN") tryLangs.push("zh-CN");
+
+            for (const l of tryLangs) {
+                const fullPath = `${baseDir}/locale/${l}/gacha_pool.json`;
+                try {
+                    const url = convertFileSrc(fullPath);
+                    const res = await fetch(url);
+                    if (!res.ok) continue;
+                    const json = await res.json();
+                    if (Array.isArray(json)) return json as GachaPoolEntry[];
+                } catch (e) {
+                    // 忽略错误并尝试下一个候选
+                }
+            }
+            return [];
+        })();
+
+        gachaPoolCache.set(cacheKey, promise);
+        return promise;
+    }
+
+    function buildFeaturedChecker(pools: GachaPoolEntry[]): FeaturedChecker {
+        const byPoolId = new Map<string, GachaPoolEntry[]>();
+        for (const pool of pools) {
+            const pid = pool.poolId || "";
+            if (!pid) continue;
+            if (!Array.isArray(pool.up) || pool.up.length === 0) continue;
+            if (!byPoolId.has(pid)) byPoolId.set(pid, []);
+            byPoolId.get(pid)!.push(pool);
+        }
+
+        // 时间排序方便区间判断（虽然当前逻辑线性扫描）
+        for (const list of byPoolId.values()) {
+            list.sort((a, b) => {
+                const sa = normalizeTimestampMs(a.start_time) ?? 0;
+                const sb = normalizeTimestampMs(b.start_time) ?? 0;
+                return sa - sb;
+            });
+        }
+
+        return (rec: GachaRecord) => {
+            if (rec.rarity !== 6) return false;
+            const poolId = rec.pool_id || "";
+            const itemId = rec.item_id || "";
+            if (!poolId || !itemId) return false;
+            const list = byPoolId.get(poolId);
+            if (!list?.length) return false;
+
+            const ts = normalizeTimestampMs(rec.pulled_at);
+            if (ts === null) return false;
+
+            for (const entry of list) {
+                const ups = Array.isArray(entry.up) ? entry.up : [];
+                if (!ups.includes(itemId)) continue;
+                const start = normalizeTimestampMs(entry.start_time);
+                const endRaw = normalizeTimestampMs(entry.end_time);
+                const end = endRaw && endRaw > 0 ? endRaw : null;
+                const afterStart = start === null || start <= 0 || ts >= start;
+                const beforeEnd = end === null || ts <= end;
+                if (afterStart && beforeEnd) return true;
+            }
+            return false;
+        };
+    }
+
     // 行为
     async function loadFromDb(targetUid: string) {
         if (!isSqliteAvailable() || !targetUid) return;
@@ -342,8 +433,14 @@ export const useGachaStore = defineStore("gacha", () => {
             await ensureMetadataDir();
             const baseDir = metadataDir.value;
             const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in (window as any);
+            const lang = normalizeLangTag(i18n.global.locale.value);
             const iconCache = new Map<string, string | undefined>();
             const localeMaps = await ensureLocaleMaps();
+            let gachaPools: GachaPoolEntry[] = [];
+            if (baseDir && isTauri) {
+                gachaPools = await loadGachaPools(baseDir, lang);
+            }
+            const featuredChecker = buildFeaturedChecker(gachaPools);
             const iconGetter: IconGetter | undefined = baseDir && isTauri
                 ? (rec) => {
                     if (!rec.item_id) return undefined;
@@ -437,7 +534,7 @@ export const useGachaStore = defineStore("gacha", () => {
                 records.sort(sortDesc);
             }
 
-            const nextBanners = generateBanners(charBeginner, charSpecial, charStandard, weaponPoolsMap, iconGetter);
+            const nextBanners = generateBanners(charBeginner, charSpecial, charStandard, weaponPoolsMap, iconGetter, featuredChecker);
             if (nextBanners.length) {
                 banners.value = nextBanners;
                 // 初始时全部展开，保留用户已展开状态
@@ -462,6 +559,7 @@ export const useGachaStore = defineStore("gacha", () => {
 
     watch(() => i18n.global.locale.value, () => {
         localeMapsCache.clear();
+        gachaPoolCache.clear();
         if (uid.value) void loadFromDb(uid.value);
     });
 

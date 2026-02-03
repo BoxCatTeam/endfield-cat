@@ -26,12 +26,15 @@ onMounted(async () => {
   window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", syncModeFromSystem);
   await appStore.loadConfig();
   try {
+    await appStore.syncAppVersion();
     const status = await appStore.checkMetadata();
     const missingMetadata = status && !status.hasManifest;
     
     // 首次启动或缺少元数据时跳转指引流程
     if (appStore.firstRun || missingMetadata) {
       router.push('/guide');
+    } else if (appStore.needsPostUpdateGuide) {
+      router.push('/guide/update');
     } else {
       // 元数据正常后静默检查更新
       updaterStore.checkForUpdate(true);

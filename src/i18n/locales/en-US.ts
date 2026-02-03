@@ -5,6 +5,7 @@ export default {
         clickTip: "Clicked: {label}",
         retry: "Retry",
         next: "Next",
+        unknown: "Unknown",
         disclaimer: {
             title: "Disclaimer",
             items: [
@@ -39,6 +40,15 @@ export default {
         testing: "Testing...",
         download: "Download & Initialize",
         customSettings: "Custom Source Settings",
+        postUpdateTitle: "Update finished, sync data now",
+        postUpdateSubtitle: "Sync metadata to avoid missing resources after upgrade.",
+        postUpdateDataTitle: "Metadata Version",
+        postUpdateDesc: "Refreshing metadata keeps icons and text aligned with the new app version. Please stay online during the update.",
+        postUpdateAction: "Update Data Now",
+        postUpdateSkip: "Later",
+        postUpdateRetry: "Re-check",
+        postUpdateSuccess: "Data update completed",
+        postUpdateFailed: "Data update failed, please retry",
         readyTitle: "All Ready",
         readySubtitle: "Configuration complete, welcome aboard!",
         enterApp: "Enter EndCat",
@@ -83,6 +93,8 @@ export default {
             latestUnknown: "Latest Version Unknown",
             found: "New version found: {version}",
             upToDate: "Up to date",
+            alreadyLatest: "Already up to date",
+            checkFailed: "Update check failed",
             failed: "Failed to check for updates",
             view: "View Release Page",
             available: "New Update Available",
@@ -92,14 +104,14 @@ export default {
             installNow: "Update Now",
             manualDownload: "Manual Download",
             later: "Later",
-            installFailed: "Update installation failed"
+            installFailed: "Update installation failed",
+            action: "Update Now"
         },
         metadata: {
             title: "Metadata",
             source: "Metadata Source",
             sourceDesc: "Select metadata download source, or switch mirror/custom address",
             sourceCdn: "GitHub (jsDelivr)",
-            sourceMirror: "GitHub (jsdmirror)",
             sourceCustom: "Custom Source",
             basePreview: "Current Source",
             customPlaceholder: "Enter full base URL, must end with /",
@@ -107,7 +119,12 @@ export default {
             reset: "Reset Metadata",
             resetDesc: "Clear downloaded metadata and icons, and re-fetch",
             resetSuccess: "Local metadata reset",
-            resetFailed: "Reset failed, please retry"
+            resetFailed: "Reset failed, please retry",
+            update: "Version Update",
+            currentVersion: "Current Version",
+            newVersionAvailable: "New version available: {version}",
+            checkSuccess: "Check completed",
+            checkFailed: "Check failed, please retry"
         },
         buttons: {
             github: "GitHub",

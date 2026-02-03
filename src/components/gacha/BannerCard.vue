@@ -22,7 +22,7 @@ export type BannerItem = {
   avg6: number;
   min6: number;
   max6: number;
-  top: Array<{ name: string; count: number; rarity: 6 | 5 | 4 | 3; icon?: string }>;
+  top: Array<{ name: string; count: number; rarity: 6 | 5 | 4 | 3; icon?: string; featured?: boolean }>;
   total?: number; // 总数若未传入则在组件内计算
 };
 
@@ -93,14 +93,24 @@ const total = computed(() => {
             class="top-item"
           >
             <template #icon>
-              <var-avatar size="32" hoverable :src="item.icon" :alt="item.name">
-                {{ item.name.slice(0, 1) }}
-              </var-avatar>
+              <div class="top-icon">
+                <var-avatar size="32" hoverable :src="item.icon" :alt="item.name">
+                  {{ item.name.slice(0, 1) }}
+                </var-avatar>
+              </div>
             </template>
             <template #default>
               <var-space justify="space-between" class="top-name">
                 <div class="op-name" :data-rarity="item.rarity">{{ item.name }}</div>
-                <div class="count">{{ item.count }}</div>
+                <var-space justify="space-between" align="center" direction="row">
+                  <var-icon
+                      v-if="item.featured"
+                      name="star"
+                      size="20"
+                      class="featured-icon"
+                  />
+                  <div class="count">{{ item.count }}</div>
+                </var-space>
               </var-space>
             </template>
           </var-cell>
@@ -221,6 +231,17 @@ const total = computed(() => {
   background: linear-gradient(var(--color-card-bg), var(--color-card-bg)), var(--color-body);
 }
 
+.top-icon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.featured-icon {
+  color: var(--rarity-6);
+  font-size: 18px;
+}
+
 .op-name {
   font-weight: 600;
   overflow: hidden;
@@ -241,7 +262,8 @@ const total = computed(() => {
 
 .count {
   text-align: right;
-  font-weight: 650;
+  font-size: 16px;
+  width: 20px;
   flex-shrink: 0;
   margin-left: 8px;
 }
