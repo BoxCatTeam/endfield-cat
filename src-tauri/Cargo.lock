@@ -890,6 +890,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-sql",
  "tokio",
+ "walkdir",
 ]
 
 [[package]]

@@ -46,6 +46,10 @@ export function resetMetadata(args: FetchMetadataArgs) {
   return invoke("reset_metadata", args);
 }
 
+export function updateMetadata(args: FetchMetadataArgs) {
+  return invoke("update_metadata", args);
+}
+
 export function checkMetadata<T = unknown>() {
   return invoke<T>("check_metadata");
 }

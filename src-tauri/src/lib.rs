@@ -40,6 +40,7 @@ pub fn run() {
             app_cmd::read_config,
             app_cmd::save_config,
             app_cmd::reset_metadata,
+            app_cmd::update_metadata,
             app_cmd::fetch_metadata_manifest,
             app_cmd::check_metadata,
             app_cmd::fetch_latest_release,
@@ -63,3 +64,4 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+

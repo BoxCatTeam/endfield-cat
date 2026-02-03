@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use walkdir::WalkDir;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -9,6 +11,7 @@ pub struct MetadataStatus {
     pub is_empty: bool,
     pub file_count: usize,
     pub has_manifest: bool,
+    pub current_version: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -17,6 +20,7 @@ pub struct RemoteManifest {
     pub package_version: Option<String>,
     pub metadata_checksum: Option<String>,
     pub item_count: Option<usize>,
+    pub total_size: Option<usize>,
 }
 
 #[derive(Clone, Serialize)]
@@ -102,13 +106,26 @@ pub fn check_metadata_status(exe_dir: &Path) -> Result<MetadataStatus, String> {
     }
 
     let file_count = count_files(&metadata_dir)?;
-    let has_manifest = metadata_dir.join("manifest.json").exists();
+    let manifest_path = metadata_dir.join("manifest.json");
+    let has_manifest = manifest_path.exists();
+    
+    let mut current_version = None;
+    if has_manifest {
+       if let Ok(content) = fs::read(&manifest_path) {
+           if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&content) {
+               current_version = json.get("package_version")
+                   .and_then(|v| v.as_str())
+                   .map(|s| s.to_string());
+           }
+       }
+    }
 
     Ok(MetadataStatus {
         path: metadata_dir.to_string_lossy().to_string(),
         is_empty: file_count == 0,
         file_count,
         has_manifest,
+        current_version,
     })
 }
 
@@ -134,14 +151,52 @@ pub async fn fetch_manifest(
     let metadata_checksum = json.get("metadata_checksum").and_then(|v| v.as_str()).map(|s| s.to_string());
     let item_count = json.get("item_count").and_then(|v| v.as_u64()).map(|v| v as usize);
 
-    Ok(RemoteManifest { package_version, metadata_checksum, item_count })
+    let total_size = json
+        .get("entries")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|e| e.get("size").and_then(|s| s.as_u64()))
+                .sum::<u64>() as usize
+        });
+
+    Ok(RemoteManifest { package_version, metadata_checksum, item_count, total_size })
 }
 
-pub async fn reset_metadata<F>(
+fn cleanup_extra_files(metadata_dir: &Path, allowed: &HashSet<String>) {
+    if !metadata_dir.exists() {
+        return;
+    }
+
+    let mut to_remove: Vec<PathBuf> = Vec::new();
+
+    for entry in WalkDir::new(metadata_dir).into_iter().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            continue;
+        }
+        if path.file_name().map(|n| n == "manifest.json").unwrap_or(false) {
+            continue;
+        }
+        if let Some(rel) = path.strip_prefix(metadata_dir).ok() {
+            let rel_str = rel.to_string_lossy().replace('\\', "/");
+            if !allowed.contains(&rel_str) {
+                to_remove.push(path.to_path_buf());
+            }
+        }
+    }
+
+    for file in to_remove {
+        let _ = fs::remove_file(&file);
+    }
+}
+
+async fn download_metadata<F>(
     exe_dir: &Path,
     client: &reqwest::Client,
     base_url: Option<String>,
     version: Option<String>,
+    clean_first: bool,
     mut on_progress: F,
 ) -> Result<MetadataStatus, String>
 where
@@ -149,17 +204,20 @@ where
 {
     let metadata_dir = exe_dir.join("data").join("metadata");
 
-    if metadata_dir.exists() {
+    if clean_first && metadata_dir.exists() {
         fs::remove_dir_all(&metadata_dir).map_err(|e| e.to_string())?;
     }
 
-    fs::create_dir_all(&metadata_dir).map_err(|e| e.to_string())?;
+    if !metadata_dir.exists() {
+        fs::create_dir_all(&metadata_dir).map_err(|e| e.to_string())?;
+    }
 
     let mut status = MetadataStatus {
         path: metadata_dir.to_string_lossy().to_string(),
         is_empty: true,
         file_count: 0,
         has_manifest: false,
+        current_version: None,
     };
 
     let Some(base) = base_url.and_then(|s| {
@@ -200,12 +258,17 @@ where
     fs::write(&manifest_path, &manifest_bytes).map_err(|e| e.to_string())?;
 
     let manifest_json: serde_json::Value = serde_json::from_slice(&manifest_bytes).map_err(|e| e.to_string())?;
+
+    let mut manifest_paths: Vec<String> = Vec::new();
+
     if let Some(entries) = manifest_json.get("entries").and_then(|v| v.as_array()) {
         let total = entries.len();
         for (i, entry) in entries.iter().enumerate() {
             let Some(path) = entry.get("path").and_then(|v| v.as_str()) else {
                 continue;
             };
+
+            manifest_paths.push(path.to_string());
 
             on_progress(DownloadProgress {
                 current: i + 1,
@@ -234,6 +297,11 @@ where
         }
     }
 
+    if !manifest_paths.is_empty() {
+        let allowed: HashSet<String> = manifest_paths.into_iter().collect();
+        cleanup_extra_files(&metadata_dir, &allowed);
+    }
+
     let file_count = count_files(&metadata_dir)?;
     let has_manifest = metadata_dir.join("manifest.json").exists();
 
@@ -242,7 +310,34 @@ where
         is_empty: file_count == 0,
         file_count,
         has_manifest,
+        current_version: manifest_json.get("package_version").and_then(|v| v.as_str()).map(|s| s.to_string()),
     };
 
     Ok(status)
+}
+
+pub async fn reset_metadata<F>(
+    exe_dir: &Path,
+    client: &reqwest::Client,
+    base_url: Option<String>,
+    version: Option<String>,
+    on_progress: F,
+) -> Result<MetadataStatus, String>
+where
+    F: FnMut(DownloadProgress),
+{
+    download_metadata(exe_dir, client, base_url, version, true, on_progress).await
+}
+
+pub async fn update_metadata<F>(
+    exe_dir: &Path,
+    client: &reqwest::Client,
+    base_url: Option<String>,
+    version: Option<String>,
+    on_progress: F,
+) -> Result<MetadataStatus, String>
+where
+    F: FnMut(DownloadProgress),
+{
+    download_metadata(exe_dir, client, base_url, version, false, on_progress).await
 }

@@ -83,6 +83,27 @@ pub async fn reset_metadata(
 }
 
 #[tauri::command]
+pub async fn update_metadata(
+    window: tauri::Window,
+    client: State<'_, reqwest::Client>,
+    base_url: Option<String>,
+    version: Option<String>,
+) -> Result<metadata::MetadataStatus, String> {
+    let exe_dir = exe_dir()?;
+
+    metadata::update_metadata(
+        &exe_dir,
+        &client,
+        base_url,
+        version,
+        |progress| {
+            let _ = window.emit("metadata-progress", progress);
+        },
+    )
+    .await
+}
+
+#[tauri::command]
 pub async fn fetch_latest_release(client: State<'_, reqwest::Client>) -> Result<release::LatestRelease, String> {
     release::fetch_latest_release(&client).await
 }

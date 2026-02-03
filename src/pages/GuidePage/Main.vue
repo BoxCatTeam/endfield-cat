@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
@@ -15,6 +15,7 @@ const stepMap: Record<string, number> = {
 }
 
 const step = ref(0)
+const hideSteps = computed(() => route.name === 'guide-update')
 
 // 根据路由同步步骤高亮
 watch(
@@ -37,8 +38,12 @@ onMounted(() => {
   <div class="guide-page-bg">
     <div class="guide-container">
       <div class="guide-content-wrapper">
-          
-        <var-steps :active="step" class="steps-header" active-color="var(--color-primary)">
+        <var-steps
+          v-if="!hideSteps"
+          :active="step"
+          class="steps-header"
+          active-color="var(--color-primary)"
+        >
           <var-step>{{ t('guide.stepWelcome') }}</var-step>
           <var-step>{{ t('guide.stepDisclaimer') }}</var-step>
           <var-step>{{ t('guide.stepResource') }}</var-step>
@@ -109,3 +114,5 @@ onMounted(() => {
   transform: translateY(-10px);
 }
 </style>
+
+

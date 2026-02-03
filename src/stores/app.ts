@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import { checkMetadata as checkMetadataCommand, fetchMetadataManifest, readConfig, saveConfig as saveConfigCommand } from '../api/tauriCommands'
+import { checkMetadata as checkMetadataCommand, fetchMetadataManifest, getAppVersion, readConfig, saveConfig as saveConfigCommand } from '../api/tauriCommands'
 
 const METADATA_CDN_TEMPLATE = 'https://cdn.jsdelivr.net/gh/BoxCatTeam/endfield-cat-metadata@v{version}/'
 const METADATA_MIRROR_TEMPLATE = 'https://cdn.jsdmirror.com/gh/BoxCatTeam/endfield-cat-metadata@v{version}/'
@@ -11,12 +11,14 @@ type RemoteManifest = {
   packageVersion?: string
   metadataChecksum?: string
   itemCount?: number
+  totalSize?: number
 }
 type MetadataStatus = {
   path: string
   isEmpty: boolean
   fileCount: number
   hasManifest: boolean
+  currentVersion?: string
   remote?: RemoteManifest
 }
 
@@ -30,13 +32,24 @@ export const useAppStore = defineStore('app', () => {
   const metadataCustomBase = ref('')
 
   const configCache = ref<Record<string, any>>({})
+  const acknowledgedAppVersion = ref<string | null>(null)
+  const pendingPostUpdateVersion = ref<string | null>(null)
+  const currentAppVersion = ref<string | null>(null)
+  const needsPostUpdateGuide = ref(false)
 
   // 初次加载时避免写回配置
   const isLoaded = ref(false)
   const metadataStatus = ref<MetadataStatus | null>(null)
+  const isMetadataOutdated = computed(() => {
+    if (!metadataStatus.value || !metadataStatus.value.remote || !metadataStatus.value.currentVersion) return false
+    const local = metadataStatus.value.currentVersion
+    const remote = metadataStatus.value.remote.packageVersion
+    return remote ? remote !== local : false
+  })
+
   const metadataNeedCheck = computed(() => {
     if (!metadataStatus.value) return false
-    return metadataStatus.value.isEmpty || !metadataStatus.value.hasManifest
+    return metadataStatus.value.isEmpty || !metadataStatus.value.hasManifest || (isMetadataOutdated.value && metadataStatus.value.remote)
   })
 
   const normalizeBaseUrl = (baseUrl: string) => {
@@ -71,6 +84,9 @@ export const useAppStore = defineStore('app', () => {
       if (config?.background) background.value = config.background
       if (config?.language) language.value = config.language
       if (config?.firstRun !== undefined) firstRun.value = config.firstRun
+      if (config?.appVersion) acknowledgedAppVersion.value = config.appVersion
+      if (config?.pendingPostUpdateVersion) pendingPostUpdateVersion.value = config.pendingPostUpdateVersion
+      if (config?.needsPostUpdateGuide !== undefined) needsPostUpdateGuide.value = config.needsPostUpdateGuide
 
       const metadata = (config?.metadata as Record<string, any>) || {}
       // baseUrl 固定在前端，只持久化自定义地址
@@ -89,12 +105,18 @@ export const useAppStore = defineStore('app', () => {
 
     try {
       const persistedCustomBase = normalizeBaseUrl(metadataCustomBase.value)
+      const existingAppVersion = (configCache.value as any)?.appVersion ?? null
       const nextConfig = {
         ...configCache.value,
         theme: theme.value,
         background: background.value,
         language: language.value,
         firstRun: firstRun.value,
+        // appVersion 仅用于“已完成引导/已确认”的版本记录，不作为当前版本来源
+        // 当前版本永远从 Tauri 的 get_app_version 获取。
+        appVersion: acknowledgedAppVersion.value ?? existingAppVersion,
+        pendingPostUpdateVersion: pendingPostUpdateVersion.value,
+        needsPostUpdateGuide: needsPostUpdateGuide.value,
         metadata: {
           customBase: persistedCustomBase,
         }
@@ -107,12 +129,52 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // 监听变更自动保存
-  watch([theme, background, language, metadataCustomBase, firstRun], () => {
+  watch([theme, background, language, metadataCustomBase, firstRun, acknowledgedAppVersion, pendingPostUpdateVersion, needsPostUpdateGuide], () => {
     void saveConfig()
   })
 
   const completeSetup = async () => {
     firstRun.value = false
+    if (!acknowledgedAppVersion.value && currentAppVersion.value) {
+      acknowledgedAppVersion.value = currentAppVersion.value
+    }
+    await saveConfig()
+  }
+
+  const syncAppVersion = async () => {
+    try {
+      const version = await getAppVersion()
+      currentAppVersion.value = version
+
+      // 若已处于“升级后引导待处理”状态，避免重复覆盖（比如多次进入 App.vue onMounted）
+      if (needsPostUpdateGuide.value) return
+
+      // 仅当已有记录版本且与当前不同，标记需要更新后引导
+      if (acknowledgedAppVersion.value && acknowledgedAppVersion.value !== version) {
+        pendingPostUpdateVersion.value = version
+        needsPostUpdateGuide.value = true
+      } else if (!acknowledgedAppVersion.value) {
+        // 兼容旧配置：没有 appVersion 但 firstRun 已完成，视为升级后首启，提示一次引导
+        if (!firstRun.value) {
+          pendingPostUpdateVersion.value = version
+          needsPostUpdateGuide.value = true
+        } else {
+          acknowledgedAppVersion.value = version
+        }
+      }
+    } catch (error) {
+      console.error('Failed to sync app version:', error)
+    }
+  }
+
+  const completePostUpdateGuide = async () => {
+    if (currentAppVersion.value) {
+      acknowledgedAppVersion.value = currentAppVersion.value
+    } else if (pendingPostUpdateVersion.value) {
+      acknowledgedAppVersion.value = pendingPostUpdateVersion.value
+    }
+    pendingPostUpdateVersion.value = null
+    needsPostUpdateGuide.value = false
     await saveConfig()
   }
 
@@ -121,7 +183,7 @@ export const useAppStore = defineStore('app', () => {
       const status = await checkMetadataCommand<MetadataStatus>()
       let merged: MetadataStatus = status
 
-      if ((status.isEmpty || !status.hasManifest) && metadataBaseUrl.value.trim()) {
+      if (metadataBaseUrl.value.trim()) {
         try {
           const remote = await fetchMetadataManifest<RemoteManifest>({ baseUrl: metadataBaseUrl.value, version: metadataVersion.value })
           merged = { ...status, remote }
@@ -150,8 +212,18 @@ export const useAppStore = defineStore('app', () => {
     getMetadataBaseUrlFor,
     metadataStatus,
     metadataNeedCheck,
+    isMetadataOutdated,
     checkMetadata,
     loadConfig,
-    completeSetup
+    syncAppVersion,
+    completeSetup,
+    completePostUpdateGuide,
+    acknowledgedAppVersion,
+    currentAppVersion,
+    pendingPostUpdateVersion,
+    needsPostUpdateGuide
   }
 })
+
+
+
