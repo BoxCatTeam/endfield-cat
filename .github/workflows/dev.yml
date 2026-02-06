@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [windows-latest, ubuntu-22.04]
+        platform: [windows-latest, macos-latest, ubuntu-22.04]
 
     steps:
       - name: Checkout
@@ -49,4 +49,7 @@ jobs:
 
       - name: Build
         run: yarn build
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
 
