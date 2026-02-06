@@ -1,7 +1,7 @@
 {
   "name": "endfield-cat",
   "private": true,
-  "version": "0.2.0-pre.69864845.b99c5f1",
+  "version": "0.2.0-pre.698655d1.4bed45b",
   "type": "module",
   "engines": {
     "node": ">=24 <25"
