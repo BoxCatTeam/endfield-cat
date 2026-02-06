@@ -69,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [windows-latest, ubuntu-22.04]
+        platform: [windows-latest, macos-latest, ubuntu-22.04]
 
     steps:
       - name: Checkout (tag)
@@ -98,13 +98,16 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf rpm
 
       - name: Install frontend dependencies
         run: yarn install --frozen-lockfile
 
       - name: Quick web build
         run: yarn build
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Build Tauri app and publish prerelease assets
         uses: tauri-apps/tauri-action@v0
@@ -116,3 +119,30 @@ jobs:
           prerelease: true
           tagName: ${{ needs.prepare.outputs.tag_name }}
           releaseName: EndCat ${{ needs.prepare.outputs.tag_name }}
+
+      - name: Create portable exe (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $version = "${{ needs.prepare.outputs.app_version }}"
+          $exe = "src-tauri/target/release/endfield-cat.exe"
+          if (-not (Test-Path -LiteralPath $exe)) {
+            throw "Missing binary: $exe"
+          }
+
+          $outDir = "src-tauri/target/release/bundle/portable"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          $portableExe = Join-Path $outDir ("endfield-cat_{0}_x64_portable.exe" -f $version)
+          Copy-Item -LiteralPath $exe -Destination $portableExe -Force
+
+          "PORTABLE_EXE=$portableExe" >> $env:GITHUB_ENV
+
+      - name: Upload portable exe to release (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ needs.prepare.outputs.tag_name }}"
+          if (-not $env:PORTABLE_EXE) { throw "PORTABLE_EXE env is not set" }
+          gh release upload $tag "$env:PORTABLE_EXE" --clobber --repo "$env:GITHUB_REPOSITORY"
