@@ -44,6 +44,7 @@ pub fn run() {
             app_cmd::fetch_metadata_manifest,
             app_cmd::check_metadata,
             app_cmd::fetch_latest_release,
+            app_cmd::fetch_latest_prerelease,
             app_cmd::download_and_apply_update,
             app_cmd::test_github_mirror,
             hg_api::auth::hg_exchange_user_token,
