@@ -39,6 +39,10 @@ export function fetchLatestRelease<T = unknown>() {
   return invoke<T>("fetch_latest_release");
 }
 
+export function fetchLatestPrerelease<T = unknown>() {
+  return invoke<T>("fetch_latest_prerelease");
+}
+
 export function downloadAndApplyUpdate(downloadUrl: string) {
   return invoke("download_and_apply_update", { downloadUrl });
 }

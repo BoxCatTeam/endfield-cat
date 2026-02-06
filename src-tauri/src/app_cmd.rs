@@ -112,6 +112,11 @@ pub async fn fetch_latest_release(client: State<'_, reqwest::Client>) -> Result<
 }
 
 #[tauri::command]
+pub async fn fetch_latest_prerelease(client: State<'_, reqwest::Client>) -> Result<release::LatestRelease, String> {
+    release::fetch_latest_prerelease(&client).await
+}
+
+#[tauri::command]
 pub async fn download_and_apply_update(
     window: tauri::Window,
     app: AppHandle,

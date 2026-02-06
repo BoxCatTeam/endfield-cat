@@ -1,17 +1,12 @@
 <script setup lang="ts">
-import { useUpdaterStore } from '../stores/updater'
-import { useI18n } from 'vue-i18n'
-import {getVersion} from "@tauri-apps/api/app";
-import {onMounted, ref} from "vue";
+import { computed } from "vue";
+import { useUpdaterStore } from "../stores/updater";
+import { useI18n } from "vue-i18n";
 
-const updater = useUpdaterStore()
-const { t } = useI18n()
+const updater = useUpdaterStore();
+const { t } = useI18n();
 
-const version = ref('')
-
-onMounted(async ()=>{
-  version.value = await getVersion();
-})
+const version = computed(() => updater.localVersion || "");
 </script>
 
 <template>
@@ -36,14 +31,33 @@ onMounted(async ()=>{
             <var-button text @click="updater.dismissDialog" :disabled="updater.isUpdating">
               {{ t('settings.update.later') }}
             </var-button>
-            <var-button text type="primary" @click="updater.manualDownload" :disabled="updater.isUpdating">
+            <var-button text type="primary" @click="updater.manualDownload()" :disabled="updater.isUpdating">
               {{ t('settings.update.manualDownload') }}
             </var-button>
+            <template v-if="updater.altUpdateInfo">
+              <var-button
+                  type="primary"
+                  @click="updater.installUpdate('primary')"
+                  :loading="updater.isUpdating"
+                  :disabled="updater.isUpdating || !updater.updateInfo?.download_url"
+              >
+                {{ t('settings.update.installStable') }}
+              </var-button>
+              <var-button
+                  type="primary"
+                  @click="updater.installUpdate('alt')"
+                  :loading="updater.isUpdating"
+                  :disabled="updater.isUpdating || !updater.altUpdateInfo?.download_url"
+              >
+                {{ t('settings.update.installPreview') }}
+              </var-button>
+            </template>
             <var-button
+                v-else
                 type="primary"
-                @click="updater.installUpdate"
+                @click="updater.installUpdate()"
                 :loading="updater.isUpdating"
-                :disabled="!updater.updateInfo?.download_url"
+                :disabled="updater.isUpdating || !updater.updateInfo?.download_url"
             >
               {{ t('settings.update.installNow') }}
             </var-button>

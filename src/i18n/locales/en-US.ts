@@ -102,6 +102,8 @@ export default {
             downloadProgress: "Download progress: {progress}%",
             preparing: "Preparing installation...",
             installNow: "Update Now",
+            installStable: "Install Stable",
+            installPreview: "Install Preview",
             manualDownload: "Manual Download",
             later: "Later",
             installFailed: "Update installation failed",

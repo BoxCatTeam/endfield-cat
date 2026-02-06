@@ -46,19 +46,23 @@ pub async fn fetch_latest_release(client: &reqwest::Client) -> Result<LatestRele
         let name = json.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
         let html_url = json.get("html_url").and_then(|v| v.as_str()).map(|s| s.to_string());
         let body = json.get("body").and_then(|v| v.as_str()).map(|s| s.to_string());
-        
-        let download_url = json.get("assets")
-            .and_then(|v| v.as_array())
-            .and_then(|assets| {
-                assets.iter().find_map(|asset| {
-                    let name = asset.get("name").and_then(|v| v.as_str())?;
-                    if name.ends_with(".exe") {
-                        asset.get("browser_download_url").and_then(|v| v.as_str()).map(|s| s.to_string())
-                    } else {
-                        None
-                    }
+
+        let download_url = if cfg!(target_os = "windows") {
+            json.get("assets")
+                .and_then(|v| v.as_array())
+                .and_then(|assets| {
+                    assets.iter().find_map(|asset| {
+                        let name = asset.get("name").and_then(|v| v.as_str())?;
+                        if name.ends_with(".exe") {
+                            asset.get("browser_download_url").and_then(|v| v.as_str()).map(|s| s.to_string())
+                        } else {
+                            None
+                        }
+                    })
                 })
-            });
+        } else {
+            None
+        };
 
         Ok(LatestRelease { tag_name, name, html_url, download_url, body })
     }
@@ -97,4 +101,67 @@ pub async fn fetch_latest_release(client: &reqwest::Client) -> Result<LatestRele
         Err(err) if err.status == Some(StatusCode::NOT_FOUND) => Err(err.message),
         Err(err) => Err(err.message),
     }
+}
+
+pub async fn fetch_latest_prerelease(client: &reqwest::Client) -> Result<LatestRelease, String> {
+    let url = "https://api.github.com/repos/BoxCatTeam/endfield-cat/releases?per_page=20";
+    let resp = client
+        .get(url)
+        .header("Accept", "application/vnd.github+json")
+        .header("User-Agent", "endfield-cat/tauri")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(format!("GitHub API status {}", status));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let releases = json.as_array().ok_or("Invalid GitHub response: expected array")?;
+
+    let target = releases.iter().find(|r| {
+        r.get("draft").and_then(|v| v.as_bool()) == Some(false)
+            && r.get("prerelease").and_then(|v| v.as_bool()) == Some(true)
+    });
+
+    let Some(target) = target else {
+        return Err("No prerelease found".to_string());
+    };
+
+    let tag_name = target
+        .get("tag_name")
+        .or_else(|| target.get("name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    if tag_name.is_empty() {
+        return Err("Missing tag_name in GitHub response".to_string());
+    }
+
+    let name = target.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let html_url = target.get("html_url").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let body = target.get("body").and_then(|v| v.as_str()).map(|s| s.to_string());
+
+    let download_url = if cfg!(target_os = "windows") {
+        target
+            .get("assets")
+            .and_then(|v| v.as_array())
+            .and_then(|assets| {
+                assets.iter().find_map(|asset| {
+                    let name = asset.get("name").and_then(|v| v.as_str())?;
+                    if name.ends_with(".exe") {
+                        asset.get("browser_download_url").and_then(|v| v.as_str()).map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                })
+            })
+    } else {
+        None
+    };
+
+    Ok(LatestRelease { tag_name, name, html_url, download_url, body })
 }

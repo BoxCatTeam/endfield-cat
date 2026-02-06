@@ -102,6 +102,8 @@ export default {
             downloadProgress: "下载进度: {progress}%",
             preparing: "准备安装...",
             installNow: "立即更新",
+            installStable: "安装稳定版",
+            installPreview: "安装预览版",
             manualDownload: "手动下载",
             later: "稍后",
             installFailed: "更新安装失败",
