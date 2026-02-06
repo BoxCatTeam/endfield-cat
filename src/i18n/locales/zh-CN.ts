@@ -80,8 +80,8 @@ export default {
         bgMinimal: "极简",
         language: "语言",
         langDesc: "EndCat 界面显示语言",
-        langZh: "中文-简体",
-        langEn: "English",
+        langZh: "简体中文(CN)",
+        langEn: "English(US)",
         game: "游戏",
         gamePath: "游戏路径",
         userData: "用户数据",
@@ -125,7 +125,25 @@ export default {
             currentVersion: "当前版本",
             newVersionAvailable: "新版本可用：{version}",
             checkSuccess: "检查完成",
-            checkFailed: "检查失败，请重试"
+            checkFailed: "检查失败，请重试",
+            needsUpdate: "元数据需要更新",
+            startVerify: "开始校验",
+            verifying: "校验中...",
+            updateAvailable: "元数据新版本可用",
+            updateNow: "立即更新",
+            updating: "正在更新...",
+            updateSuccess: "元数据更新完成",
+            updateFailed: "元数据更新失败",
+            phases: {
+                verifying: "校验中",
+                downloading: "下载中",
+                cleaning: "清理中"
+            },
+            verify: "校验文件",
+            verifySuccess: "文件校验完成",
+            verifyFailed: "文件校验失败",
+            verifyingFiles: "正在校验文件",
+            repairingFiles: "检测到元数据缺失，正在修复"
         },
         buttons: {
             github: "GitHub",
@@ -138,18 +156,50 @@ export default {
             openLinkFailed: "无法打开链接",
             devPlaceholder: "开发中暂不可用"
         },
+        githubMirror: {
+            title: "Github 镜像",
+            enable: "Github 镜像",
+            enableDesc: "用于加速软件更新下载和其他 Github 相关下载",
+            source: "镜像源",
+            sourceDesc: "选择镜像源或自定义地址",
+            currentSource: "当前源",
+            customUrl: "自定义地址",
+            customPlaceholder: "输入镜像 URL 模板，使用 {url} 作为占位符",
+            sources: {
+                "gh-proxy-cf": "gh-proxy.com (Cloudflare)",
+                "gh-proxy-fastly": "gh-proxy.com (Fastly)",
+                "gh-proxy-edgeone": "gh-proxy.com (edgeone)",
+                "ghfast": "ghproxy.link",
+                "custom": "自定义"
+            }
+        },
     },
     gacha: {
         refresh: "刷新",
         refreshIncremental: "增量刷新",
         refreshFull: "全量刷新",
+        refreshFromLog: "从日志同步（自动，仅国服）",
         importExport: "导入/导出",
         noAccount: "未添加账号",
         addAccountTauriWarning: "添加账号需要在 Tauri 桌面端运行",
+        channels: {
+            cnOfficial: "官服(CN)",
+            cnBilibili: "Bilibili",
+            globalAsia: "官服(Asia)",
+            globalUsEu: "官服(US/EU)"
+        },
         addAccount: {
             title: "添加账号",
-            help: "点击下方按钮登录鹰角通行证，登录成功后将自动获取账号信息。",
-            loginBtn: "登录鹰角通行证",
+            providers: {
+                hypergryph: "国服（官服/B服）",
+                gryphline: "国际服（Gryphline）"
+            },
+            help: "点击下方按钮登录账号，登录成功后将自动获取账号信息。",
+            helpHypergryph: "国服：点击下方按钮登录鹰角通行证，登录成功后将自动获取账号信息。",
+            helpGryphline: "国际服：点击下方按钮登录 Gryphline 账号，登录成功后将自动获取账号信息。",
+            loginBtn: "登录账号",
+            loginBtnHypergryph: "登录鹰角通行证",
+            loginBtnGryphline: "登录 Gryphline 账号",
             tokenPlaceholder: "手动粘贴 Token",
             selectUid: "选择 UID",
             next: "下一步",
@@ -158,7 +208,9 @@ export default {
             invalidToken: "请输入有效的 Token",
             noUid: "绑定列表中未找到 UID",
             invalidUid: "所选 UID 无效",
-            success: "已添加账号：{name}"
+            success: "已添加账号：{name}",
+            successMultiple: "已添加 {count} 个账号：{names}",
+            partialFailed: "部分区服添加失败（{failed} 个）"
         },
         stats: {
             s6: "六星",
@@ -189,6 +241,8 @@ export default {
             syncFull: "全量同步完成",
             saveFailed: "保存记录失败",
             noNewRecords: "没有发现新记录",
+            noRecords: "暂无记录",
+            noRecordsHint: "点击「刷新」按钮同步您的寻访记录",
             selectDelete: "请选择要删除的账号",
             confirmDelete: "确认删除账号 {uid} 吗？",
             deleteSuccess: "已删除账号"

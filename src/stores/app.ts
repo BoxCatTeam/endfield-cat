@@ -1,12 +1,22 @@
+import { listen } from '@tauri-apps/api/event'
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import { checkMetadata as checkMetadataCommand, fetchMetadataManifest, getAppVersion, readConfig, saveConfig as saveConfigCommand } from '../api/tauriCommands'
+import { checkMetadata as checkMetadataCommand, fetchMetadataManifest, getAppVersion, readConfig, saveConfig as saveConfigCommand, updateMetadata } from '../api/tauriCommands'
 
 const METADATA_CDN_TEMPLATE = 'https://cdn.jsdelivr.net/gh/BoxCatTeam/endfield-cat-metadata@v{version}/'
 const METADATA_MIRROR_TEMPLATE = 'https://cdn.jsdmirror.com/gh/BoxCatTeam/endfield-cat-metadata@v{version}/'
 const DEFAULT_METADATA_VERSION = 'latest'
 
 export type MetadataSourceType = 'cdn' | 'mirror' | 'custom'
+export type GithubMirrorSourceType = 'gh-proxy-cf' | 'gh-proxy-fastly' | 'gh-proxy-edgeone' | 'ghfast' | 'custom'
+
+export const GITHUB_MIRROR_TEMPLATES: Record<GithubMirrorSourceType, string> = {
+  'gh-proxy-cf': 'https://gh-proxy.org/{url}',
+  'gh-proxy-fastly': 'https://cdn.gh-proxy.org/{url}',
+  'gh-proxy-edgeone': 'https://edgeone.gh-proxy.org/{url}',
+  'ghfast': 'https://ghfast.top/{url}',
+  'custom': '{url}',
+}
 type RemoteManifest = {
   packageVersion?: string
   metadataChecksum?: string
@@ -21,6 +31,14 @@ type MetadataStatus = {
   currentVersion?: string
   remote?: RemoteManifest
 }
+
+export type MetadataUpdateProgress = {
+  phase: 'verifying' | 'downloading' | 'cleaning'
+  current: number
+  total: number
+  path: string
+}
+
 
 export const useAppStore = defineStore('app', () => {
   const theme = ref<'system' | 'light' | 'dark'>('system')
@@ -37,9 +55,20 @@ export const useAppStore = defineStore('app', () => {
   const currentAppVersion = ref<string | null>(null)
   const needsPostUpdateGuide = ref(false)
 
+  // GitHub 镜像配置
+  const githubMirrorEnabled = ref(false)
+  const githubMirrorSource = ref<GithubMirrorSourceType>('gh-proxy-cf')
+  const githubMirrorCustomTemplate = ref('')
+
   // 初次加载时避免写回配置
   const isLoaded = ref(false)
   const metadataStatus = ref<MetadataStatus | null>(null)
+
+  // 元数据更新相关状态
+  const showMetadataUpdateDialog = ref(false)
+  const isMetadataUpdating = ref(false)
+  const metadataUpdateProgress = ref<MetadataUpdateProgress | null>(null)
+
   const isMetadataOutdated = computed(() => {
     if (!metadataStatus.value || !metadataStatus.value.remote || !metadataStatus.value.currentVersion) return false
     const local = metadataStatus.value.currentVersion
@@ -62,7 +91,8 @@ export const useAppStore = defineStore('app', () => {
     if (sourceType === 'custom') {
       return normalizeBaseUrl(customBase ?? metadataCustomBase.value)
     }
-    const version = metadataVersion.value.trim() || DEFAULT_METADATA_VERSION
+    // 优先使用 app version，latest 作为兜底
+    const version = currentAppVersion.value || metadataVersion.value.trim() || DEFAULT_METADATA_VERSION
     if (sourceType === 'mirror') {
       return METADATA_MIRROR_TEMPLATE.replace('{version}', version)
     }
@@ -92,6 +122,13 @@ export const useAppStore = defineStore('app', () => {
       // baseUrl 固定在前端，只持久化自定义地址
       if (metadata.customBase) metadataCustomBase.value = metadata.customBase
 
+      // 加载 GitHub 镜像配置
+      if (config?.githubMirror) {
+        githubMirrorEnabled.value = config.githubMirror.enabled ?? false
+        githubMirrorSource.value = config.githubMirror.source ?? 'gh-proxy-cf'
+        githubMirrorCustomTemplate.value = config.githubMirror.customTemplate ?? ''
+      }
+
       isLoaded.value = true
     } catch (error) {
       console.error('Failed to load config:', error)
@@ -119,6 +156,11 @@ export const useAppStore = defineStore('app', () => {
         needsPostUpdateGuide: needsPostUpdateGuide.value,
         metadata: {
           customBase: persistedCustomBase,
+        },
+        githubMirror: {
+          enabled: githubMirrorEnabled.value,
+          source: githubMirrorSource.value,
+          customTemplate: githubMirrorCustomTemplate.value,
         }
       }
       configCache.value = nextConfig
@@ -129,9 +171,18 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // 监听变更自动保存
-  watch([theme, background, language, metadataCustomBase, firstRun, acknowledgedAppVersion, pendingPostUpdateVersion, needsPostUpdateGuide], () => {
+  watch([theme, background, language, metadataCustomBase, firstRun, acknowledgedAppVersion, pendingPostUpdateVersion, needsPostUpdateGuide, githubMirrorEnabled, githubMirrorSource, githubMirrorCustomTemplate], () => {
     void saveConfig()
   })
+
+  // 获取当前镜像URL模板
+  const getGithubMirrorTemplate = () => {
+    if (!githubMirrorEnabled.value) return '{url}'
+    if (githubMirrorSource.value === 'custom') {
+      return githubMirrorCustomTemplate.value || '{url}'
+    }
+    return GITHUB_MIRROR_TEMPLATES[githubMirrorSource.value]
+  }
 
   const completeSetup = async () => {
     firstRun.value = false
@@ -185,7 +236,8 @@ export const useAppStore = defineStore('app', () => {
 
       if (metadataBaseUrl.value.trim()) {
         try {
-          const remote = await fetchMetadataManifest<RemoteManifest>({ baseUrl: metadataBaseUrl.value, version: metadataVersion.value })
+          const version = currentAppVersion.value || metadataVersion.value
+          const remote = await fetchMetadataManifest<RemoteManifest>({ baseUrl: metadataBaseUrl.value, version })
           merged = { ...status, remote }
         } catch (error) {
           console.error('Failed to fetch remote manifest:', error)
@@ -198,6 +250,45 @@ export const useAppStore = defineStore('app', () => {
       console.error('Failed to check metadata:', error)
       return null
     }
+  }
+
+  // 执行元数据差分更新
+  const performMetadataUpdate = async () => {
+    if (isMetadataUpdating.value) return
+
+    isMetadataUpdating.value = true
+    metadataUpdateProgress.value = null
+    showMetadataUpdateDialog.value = true  // 显示进度弹窗
+
+    try {
+      let unlisten: (() => void) | null = null
+
+      // 监听更新进度事件
+      unlisten = await listen<MetadataUpdateProgress>('metadata-update-progress', (event) => {
+        metadataUpdateProgress.value = event.payload
+      })
+
+      try {
+        await updateMetadata(metadataBaseUrl.value)
+
+        // 更新完成后刷新状态
+        await checkMetadata()
+        showMetadataUpdateDialog.value = false
+      } finally {
+        if (unlisten) unlisten()
+      }
+    } catch (error) {
+      console.error('Failed to update metadata:', error)
+      throw error
+    } finally {
+      isMetadataUpdating.value = false
+      metadataUpdateProgress.value = null
+    }
+  }
+
+  // 关闭更新弹窗
+  const dismissMetadataUpdateDialog = () => {
+    showMetadataUpdateDialog.value = false
   }
 
   return {
@@ -221,9 +312,18 @@ export const useAppStore = defineStore('app', () => {
     acknowledgedAppVersion,
     currentAppVersion,
     pendingPostUpdateVersion,
-    needsPostUpdateGuide
+    needsPostUpdateGuide,
+    githubMirrorEnabled,
+    githubMirrorSource,
+    githubMirrorCustomTemplate,
+    getGithubMirrorTemplate,
+    // 元数据更新相关
+    showMetadataUpdateDialog,
+    isMetadataUpdating,
+    metadataUpdateProgress,
+    performMetadataUpdate,
+    dismissMetadataUpdateDialog
   }
 })
-
 
 

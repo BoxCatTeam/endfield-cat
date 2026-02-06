@@ -80,8 +80,8 @@ export default {
         bgMinimal: "Minimal",
         language: "Language",
         langDesc: "EndCat interface language",
-        langZh: "中文-简体",
-        langEn: "English",
+        langZh: "简体中文(CN)",
+        langEn: "English(US)",
         game: "Game",
         gamePath: "Game Path",
         userData: "User Data",
@@ -112,6 +112,7 @@ export default {
             source: "Metadata Source",
             sourceDesc: "Select metadata download source, or switch mirror/custom address",
             sourceCdn: "GitHub (jsDelivr)",
+            sourceMirror: "GitHub (jsdmirror)",
             sourceCustom: "Custom Source",
             basePreview: "Current Source",
             customPlaceholder: "Enter full base URL, must end with /",
@@ -124,7 +125,25 @@ export default {
             currentVersion: "Current Version",
             newVersionAvailable: "New version available: {version}",
             checkSuccess: "Check completed",
-            checkFailed: "Check failed, please retry"
+            checkFailed: "Check failed, please retry",
+            needsUpdate: "Metadata needs update",
+            startVerify: "Start Verify",
+            verifying: "Verifying...",
+            updateAvailable: "New metadata version available",
+            updateNow: "Update Now",
+            updating: "Updating...",
+            updateSuccess: "Metadata update completed",
+            updateFailed: "Metadata update failed",
+            phases: {
+                verifying: "Verifying",
+                downloading: "Downloading",
+                cleaning: "Cleaning"
+            },
+            verify: "Verify Files",
+            verifySuccess: "File verification completed",
+            verifyFailed: "File verification failed",
+            verifyingFiles: "Verifying files",
+            repairingFiles: "Metadata missing detected, repairing"
         },
         buttons: {
             github: "GitHub",
@@ -137,18 +156,50 @@ export default {
             openLinkFailed: "Failed to open link",
             devPlaceholder: "Not available in development"
         },
+        githubMirror: {
+            title: "Github Mirror",
+            enable: "Github Mirror",
+            enableDesc: "Accelerate software updates and other Github downloads",
+            source: "Mirror Source",
+            sourceDesc: "Select mirror source or custom address",
+            currentSource: "Current Source",
+            customUrl: "Custom URL",
+            customPlaceholder: "Enter mirror URL template, use {url} as placeholder",
+            sources: {
+                "gh-proxy-cf": "gh-proxy.com (Cloudflare)",
+                "gh-proxy-fastly": "gh-proxy.com (Fastly)",
+                "gh-proxy-edgeone": "gh-proxy.com (edgeone)",
+                "ghfast": "ghproxy.link",
+                "custom": "Custom"
+            }
+        },
     },
     gacha: {
         refresh: "Refresh",
         refreshIncremental: "Incremental Refresh",
         refreshFull: "Full Refresh",
+        refreshFromLog: "Sync From Log (Auto, CN only)",
         importExport: "Import/Export",
         noAccount: "No Account Added",
         addAccountTauriWarning: "Adding accounts requires running in Tauri desktop app",
+        channels: {
+            cnOfficial: "CN Official",
+            cnBilibili: "CN Bilibili",
+            globalAsia: "Global (Asia)",
+            globalUsEu: "Global (US/EU)"
+        },
         addAccount: {
             title: "Add Account",
-            help: "Click the button below to log in to Hypergryph Account. Account info will be retrieved automatically after login.",
-            loginBtn: "Login Hypergryph Account",
+            providers: {
+                hypergryph: "CN (Hypergryph)",
+                gryphline: "Global (Gryphline)"
+            },
+            help: "Click the button below to log in. Account info will be retrieved automatically after login.",
+            helpHypergryph: "CN: Click the button below to log in to Hypergryph Account. Account info will be retrieved automatically after login.",
+            helpGryphline: "Global: Click the button below to log in to Gryphline Account. Account info will be retrieved automatically after login.",
+            loginBtn: "Login Account",
+            loginBtnHypergryph: "Login Hypergryph Account",
+            loginBtnGryphline: "Login Gryphline Account",
             tokenPlaceholder: "Manually Paste Token",
             selectUid: "Select UID",
             next: "Next",
@@ -157,7 +208,9 @@ export default {
             invalidToken: "Please enter a valid Token",
             noUid: "UID not found in binding list",
             invalidUid: "Selected UID is invalid",
-            success: "Account added: {name}"
+            success: "Account added: {name}",
+            successMultiple: "Added {count} accounts: {names}",
+            partialFailed: "Some accounts failed to add ({failed})"
         },
         stats: {
             s6: "6-Star",
@@ -176,7 +229,7 @@ export default {
             beginnerTitle: "Beginner Banner",
             specialTitle: "Character Event",
             standardTitle: "Standard Banner",
-            weaponTitle: "Weapon: {name}",
+            weaponTitle: "Weapon Procurement",
             weaponUnknown: "Unknown Weapon Pool",
             topLabel: "6-Star Record"
         },
@@ -188,6 +241,8 @@ export default {
             syncFull: "Full sync complete",
             saveFailed: "Failed to save records",
             noNewRecords: "No new records found",
+            noRecords: "No records yet",
+            noRecordsHint: "Click the \"Refresh\" button to sync your gacha records",
             selectDelete: "Please select an account to delete",
             confirmDelete: "Are you sure you want to delete account {uid}?",
             deleteSuccess: "Account deleted"

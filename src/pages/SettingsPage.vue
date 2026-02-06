@@ -6,8 +6,10 @@ import { useI18n } from 'vue-i18n'
 import logo from '../assets/icon.webp'
 import { useAppStore } from '../stores/app'
 import { useUpdaterStore } from '../stores/updater'
-import type { MetadataSourceType } from '../stores/app'
-import { fetchMetadataManifest, getAppVersion, resetMetadata as resetMetadataCommand } from '../api/tauriCommands'
+import type { MetadataSourceType, GithubMirrorSourceType } from '../stores/app'
+import { GITHUB_MIRROR_TEMPLATES } from '../stores/app'
+import { fetchMetadataManifest, getAppVersion, resetMetadata as resetMetadataCommand, testGithubMirror } from '../api/tauriCommands'
+import SplitButtonSelect from '../components/SplitButtonSelect.vue'
 
 const { t, tm } = useI18n()
 const disclaimerItems = computed(() => tm('common.disclaimer.items') as string[])
@@ -77,9 +79,7 @@ const connectivity = ref<Record<MetadataSourceType, ConnectivityState>>({
   custom: { status: 'idle', latency: 0, error: '' },
 })
 
-const anyTesting = computed(() => {
-  return Object.values(connectivity.value).some((s) => s.status === 'testing')
-})
+
 
 const getBaseUrlFor = (source: MetadataSourceType) => {
   return appStore.getMetadataBaseUrlFor(source, metadataCustomBase.value)
@@ -95,9 +95,10 @@ const testSourceConnection = async (source: MetadataSourceType) => {
   connectivity.value[source] = { status: 'testing', latency: 0, error: '' }
   const start = performance.now()
   try {
+    const version = appStore.currentAppVersion || metadataVersion.value
     await fetchMetadataManifest({
       baseUrl,
-      version: metadataVersion.value
+      version
     })
     connectivity.value[source] = {
       status: 'success',
@@ -122,10 +123,6 @@ const testAllConnections = async () => {
 }
 
 const selectSource = async (source: MetadataSourceType) => {
-  if (source === 'custom') {
-    Snackbar.info(t('settings.messages.devPlaceholder'))
-    return
-  }
   metadataSourceType.value = source
   await testSourceConnection(source)
 }
@@ -172,9 +169,9 @@ const openLink = async (nameKey: string) => {
 }
 
 const themeOptions = computed(() => [
-  { label: t('settings.themeSystem'), value: 'system' },
-  { label: t('settings.themeLight'), value: 'light' },
-  { label: t('settings.themeDark'), value: 'dark' },
+  { label: t('settings.themeSystem'), value: 'system' as const },
+  { label: t('settings.themeLight'), value: 'light' as const },
+  { label: t('settings.themeDark'), value: 'dark' as const },
 ])
 
 const bgOptions = computed(() => [
@@ -186,6 +183,91 @@ const langOptions = computed(() => [
   { label: t('settings.langZh'), value: 'zh-CN' },
   { label: t('settings.langEn'), value: 'en-US' },
 ])
+
+const metadataSourceOptions = computed(() => [
+  { label: t('settings.metadata.sourceCdn'), value: 'cdn' },
+  { label: t('settings.metadata.sourceMirror'), value: 'mirror' },
+  { label: t('settings.metadata.sourceCustom'), value: 'custom' },
+])
+
+// GitHub 镜像相关
+const githubMirrorEnabled = computed({
+  get: () => appStore.githubMirrorEnabled,
+  set: (val) => appStore.githubMirrorEnabled = val
+})
+
+const githubMirrorSource = computed({
+  get: () => appStore.githubMirrorSource,
+  set: (val) => appStore.githubMirrorSource = val
+})
+
+const githubMirrorCustomTemplate = computed({
+  get: () => appStore.githubMirrorCustomTemplate,
+  set: (val) => appStore.githubMirrorCustomTemplate = val
+})
+
+const githubMirrorSourceOptions = computed(() => [
+  { label: t('settings.githubMirror.sources.gh-proxy-cf'), value: 'gh-proxy-cf' as const },
+  { label: t('settings.githubMirror.sources.gh-proxy-fastly'), value: 'gh-proxy-fastly' as const },
+  { label: t('settings.githubMirror.sources.gh-proxy-edgeone'), value: 'gh-proxy-edgeone' as const },
+  { label: t('settings.githubMirror.sources.ghfast'), value: 'ghfast' as const },
+  { label: t('settings.githubMirror.sources.custom'), value: 'custom' as const },
+])
+
+const githubMirrorConnectivity = ref<{ status: 'idle' | 'testing' | 'success' | 'failed'; latency: number; error: string }>({
+  status: 'idle',
+  latency: 0,
+  error: ''
+})
+
+const getGithubMirrorTemplate = () => {
+  if (githubMirrorSource.value === 'custom') {
+    return githubMirrorCustomTemplate.value || '{url}'
+  }
+  return GITHUB_MIRROR_TEMPLATES[githubMirrorSource.value]
+}
+
+const testGithubMirrorConnection = async () => {
+  const template = getGithubMirrorTemplate()
+  if (!template || template === '{url}') {
+    githubMirrorConnectivity.value = { status: 'idle', latency: 0, error: '' }
+    return
+  }
+
+  githubMirrorConnectivity.value = { status: 'testing', latency: 0, error: '' }
+  try {
+    const latency = await testGithubMirror(template)
+    githubMirrorConnectivity.value = { status: 'success', latency, error: '' }
+  } catch (e: any) {
+    console.error('GitHub mirror test failed:', e)
+    githubMirrorConnectivity.value = {
+      status: 'failed',
+      latency: 0,
+      error: typeof e === 'string' ? e : t('guide.connectionFailed')
+    }
+  }
+}
+
+const selectGithubMirrorSource = async (source: GithubMirrorSourceType) => {
+  githubMirrorSource.value = source
+  await testGithubMirrorConnection()
+}
+
+watch(githubMirrorEnabled, (enabled) => {
+  if (enabled) {
+    void testGithubMirrorConnection()
+  } else {
+    githubMirrorConnectivity.value = { status: 'idle', latency: 0, error: '' }
+  }
+})
+
+watch(githubMirrorCustomTemplate, () => {
+  if (githubMirrorSource.value === 'custom') {
+    githubMirrorConnectivity.value = { status: 'idle', latency: 0, error: '' }
+  }
+})
+
+
 
 watch(metadataVersion, () => {
   connectivity.value = {
@@ -206,14 +288,14 @@ const metadataCurrentVersion = computed(() => appStore.metadataStatus?.currentVe
 const isMetadataOutdated = computed(() => appStore.isMetadataOutdated)
 const remoteVersion = computed(() => appStore.metadataStatus?.remote?.packageVersion)
 
-const checkMetadataUpdate = async () => {
+const verifyMetadataFiles = async () => {
     checkingMetadataUpdate.value = true
     try {
-        await appStore.checkMetadata()
-        Snackbar.success(t('settings.metadata.checkSuccess'))
+        await appStore.performMetadataUpdate()
+        Snackbar.success(t('settings.metadata.verifySuccess'))
     } catch (error) {
-        console.error('Failed to check metadata update:', error)
-        Snackbar.error(t('settings.metadata.checkFailed'))
+        console.error('Failed to verify metadata files:', error)
+        Snackbar.error(t('settings.metadata.verifyFailed'))
     } finally {
         checkingMetadataUpdate.value = false
     }
@@ -222,9 +304,10 @@ const checkMetadataUpdate = async () => {
 const resetMetadata = async () => {
   resetMetadataLoading.value = true
   try {
+    const version = appStore.currentAppVersion || metadataVersion.value
     await resetMetadataCommand({
       baseUrl: metadataBaseUrl.value,
-      version: metadataVersion.value
+      version
     })
     // 重新检查以更新状态
     await appStore.checkMetadata()
@@ -323,9 +406,7 @@ const notAvailable = () => {
                   <div class="cell-desc">{{ t('settings.themeDesc') }}</div>
                 </template>
                 <template #extra>
-                  <var-select v-model="theme" size="small" variant="outlined" class="select-list-theme">
-                    <var-option v-for="opt in themeOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
-                  </var-select>
+                  <SplitButtonSelect v-model="theme" :options="themeOptions" />
                 </template>
               </var-cell>
             </var-paper>
@@ -343,9 +424,7 @@ const notAvailable = () => {
                 </template>
                 <template #extra>
                    <div @click="notAvailable">
-                    <var-select disabled v-model="background" size="small" variant="outlined" class="select-list-bg">
-                      <var-option v-for="opt in bgOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
-                    </var-select>
+                     <SplitButtonSelect disabled v-model="background" :options="bgOptions" />
                    </div>
                 </template>
               </var-cell>
@@ -363,9 +442,7 @@ const notAvailable = () => {
                   <div class="cell-desc">{{ t('settings.langDesc') }}</div>
                 </template>
                 <template #extra>
-                  <var-select v-model="language" size="small" variant="outlined" class="select-list-lang">
-                    <var-option v-for="opt in langOptions" :key="opt.value" :label="opt.label" :value="opt.value"/>
-                  </var-select>
+                  <SplitButtonSelect v-model="language" :options="langOptions" />
                 </template>
               </var-cell>
             </var-paper>
@@ -440,9 +517,9 @@ const notAvailable = () => {
                         variant="text"
                         :loading="checkingMetadataUpdate"
                         :elevation="false"
-                        @click="checkMetadataUpdate"
+                        @click="verifyMetadataFiles"
                       >
-                        {{ t('settings.checkUpdate') }}
+                        {{ t('settings.metadata.verify') }}
                       </var-button>
                       <var-button
                         v-if="isMetadataOutdated"
@@ -471,46 +548,29 @@ const notAvailable = () => {
                   <div class="cell-desc">{{ t('settings.metadata.sourceDesc') }}</div>
                 </template>
                 <template #extra>
-                  <var-button text type="primary" size="small" :disabled="anyTesting" @click="testAllConnections">{{ t('common.retry') }}</var-button>
+                  <SplitButtonSelect v-model="metadataSourceType" :options="metadataSourceOptions" @update:model-value="selectSource" />
                 </template>
               </var-cell>
+            </var-paper>
 
-              <var-cell
-                v-for="src in (['cdn', 'mirror', 'custom'] as const)"
-                :key="src"
-                :class="{ 'metadata-option-disabled': src === 'custom' }"
-                ripple
-                @click="selectSource(src)"
-              >
+            <!-- 仅展示当前选中源的状态 -->
+            <var-paper :elevation="false" radius="12">
+              <var-cell>
                 <template #icon>
-                  <var-icon name="server" size="24px" class="section-icon" />
+                   <var-icon name="access-point-network" size="24px" class="section-icon" />
                 </template>
                 <template #default>
-                  <div class="cell-title">
-                    <span v-if="src === 'cdn'">{{ t('settings.metadata.sourceCdn') }}</span>
-                    <span v-else-if="src === 'mirror'">{{ t('settings.metadata.sourceMirror') }}</span>
-                    <span v-else>{{ t('settings.metadata.sourceCustom') }}</span>
-                  </div>
+                   <div class="cell-title">{{ t('guide.connectivity') }}</div>
                 </template>
                 <template #description>
-                  <div v-if="src === 'custom'" class="metadata-url">{{ getBaseUrlFor(src) || t('settings.metadata.customPlaceholder') }}</div>
                   <div class="metadata-conn">
-                    <span class="metadata-conn-label">{{ t('guide.connectivity') }}</span>
-                    <span v-if="connectivity[src].status === 'testing'" class="metadata-conn-testing">
-                      <var-loading type="cube" size="small" :radius="2" class="metadata-conn-loading" /> {{ t('guide.testing') }}
+                    <span class="metadata-conn-label" style="font-weight: 500;">
+                      {{ metadataSourceOptions.find(o => o.value === metadataSourceType)?.label || metadataSourceType }}
                     </span>
-                    <span v-else-if="connectivity[src].status === 'success'" class="metadata-conn-success">
-                      <var-icon name="check-circle-outline" size="14" /> {{ connectivity[src].latency }}ms
-                    </span>
-                    <span v-else-if="connectivity[src].status === 'failed'" class="metadata-conn-failed">
-                      <var-icon name="close-circle-outline" size="14" /> {{ connectivity[src].error }}
-                    </span>
-                    <span v-else class="metadata-conn-idle">--</span>
                   </div>
                   <div
-                    v-if="src === 'custom' && metadataSourceType === 'custom'"
+                    v-if="metadataSourceType === 'custom'"
                     class="metadata-inline-input"
-                    @click.stop
                   >
                     <div class="inline-input-label">{{ t('settings.metadata.sourceCustom') }}</div>
                     <var-input
@@ -523,8 +583,31 @@ const notAvailable = () => {
                     />
                   </div>
                 </template>
+
                 <template #extra>
-                  <var-icon v-if="metadataSourceType === src" name="check" />
+                   <div style="display: flex; align-items: center; gap: 8px;">
+                     <span v-if="connectivity[metadataSourceType].status === 'testing'" class="metadata-conn-testing">
+                        <var-loading type="cube" size="small" :radius="2" class="metadata-conn-loading" />
+                      </span>
+                      <span v-else-if="connectivity[metadataSourceType].status === 'success'" class="metadata-conn-success">
+                        <var-icon name="check-circle-outline" size="14" style="margin-right: 4px" />{{ connectivity[metadataSourceType].latency }}ms
+                      </span>
+                      <span v-else-if="connectivity[metadataSourceType].status === 'failed'" class="metadata-conn-failed">
+                        <var-icon name="close-circle-outline" size="14" style="margin-right: 4px" />{{ t('guide.connectionFailed') }}
+                      </span>
+                      <span v-else class="metadata-conn-idle">--ms</span>
+
+                      <var-button
+                        round
+                        text
+                        size="mini"
+                        type="primary"
+                        :disabled="connectivity[metadataSourceType].status === 'testing'"
+                        @click="testSourceConnection(metadataSourceType)"
+                      >
+                        <var-icon name="refresh" size="16" />
+                      </var-button>
+                   </div>
                 </template>
               </var-cell>
             </var-paper>
@@ -550,6 +633,105 @@ const notAvailable = () => {
                   >
                     {{ t('settings.metadata.reset') }}
                   </var-button>
+                </template>
+              </var-cell>
+            </var-paper>
+          </var-space>
+        </section>
+
+        <!-- Github 镜像 -->
+        <section>
+          <div class="section-title">{{ t('settings.githubMirror.title') }}</div>
+          <var-space direction="column" size="small">
+            <!-- 启用开关 -->
+            <var-paper :elevation="false" radius="12">
+              <var-cell>
+                <template #icon>
+                  <var-icon name="github" size="24px" class="section-icon" />
+                </template>
+                <template #default>
+                  <div class="cell-title">{{ t('settings.githubMirror.enable') }}</div>
+                </template>
+                <template #description>
+                  <div class="cell-desc">{{ t('settings.githubMirror.enableDesc') }}</div>
+                </template>
+                <template #extra>
+                  <var-switch v-model="githubMirrorEnabled" />
+                </template>
+              </var-cell>
+            </var-paper>
+
+            <!-- 镜像源选择（仅启用时显示） -->
+            <var-paper v-if="githubMirrorEnabled" :elevation="false" radius="12">
+              <var-cell>
+                <template #icon>
+                  <var-icon name="source-branch" size="24px" class="section-icon" />
+                </template>
+                <template #default>
+                  <div class="cell-title">{{ t('settings.githubMirror.source') }}</div>
+                </template>
+                <template #description>
+                  <div class="cell-desc">{{ t('settings.githubMirror.sourceDesc') }}</div>
+                </template>
+                <template #extra>
+                  <SplitButtonSelect v-model="githubMirrorSource" :options="githubMirrorSourceOptions" @update:model-value="selectGithubMirrorSource" />
+                </template>
+              </var-cell>
+            </var-paper>
+
+            <!-- 当前源连通性展示 -->
+            <var-paper v-if="githubMirrorEnabled" :elevation="false" radius="12">
+              <var-cell>
+                <template #icon>
+                  <var-icon name="access-point-network" size="24px" class="section-icon" />
+                </template>
+                <template #default>
+                  <div class="cell-title">{{ t('settings.githubMirror.currentSource') }}</div>
+                </template>
+                <template #description>
+                  <div class="metadata-conn">
+                    <span class="metadata-conn-label" style="font-weight: 500;">
+                      {{ githubMirrorSourceOptions.find(o => o.value === githubMirrorSource)?.label }}
+                    </span>
+                  </div>
+                  <!-- 自定义输入框 -->
+                  <div v-if="githubMirrorSource === 'custom'" class="metadata-inline-input">
+                    <div class="inline-input-label">{{ t('settings.githubMirror.customUrl') }}</div>
+                    <var-input
+                      v-model="githubMirrorCustomTemplate"
+                      size="small"
+                      variant="outlined"
+                      class="metadata-input"
+                      :placeholder="t('settings.githubMirror.customPlaceholder')"
+                      @change="testGithubMirrorConnection"
+                    />
+                  </div>
+                </template>
+                <template #extra>
+                  <!-- 连通性状态与重测按钮 -->
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span v-if="githubMirrorConnectivity.status === 'testing'" class="metadata-conn-testing">
+                      <var-loading type="cube" size="small" :radius="2" class="metadata-conn-loading" />
+                    </span>
+                    <span v-else-if="githubMirrorConnectivity.status === 'success'" class="metadata-conn-success">
+                      <var-icon name="check-circle-outline" size="14" style="margin-right: 4px" />{{ githubMirrorConnectivity.latency }}ms
+                    </span>
+                    <span v-else-if="githubMirrorConnectivity.status === 'failed'" class="metadata-conn-failed">
+                      <var-icon name="close-circle-outline" size="14" style="margin-right: 4px" />{{ t('guide.connectionFailed') }}
+                    </span>
+                    <span v-else class="metadata-conn-idle">--ms</span>
+
+                    <var-button
+                      round
+                      text
+                      size="mini"
+                      type="primary"
+                      :disabled="githubMirrorConnectivity.status === 'testing'"
+                      @click="testGithubMirrorConnection"
+                    >
+                      <var-icon name="refresh" size="16" />
+                    </var-button>
+                  </div>
                 </template>
               </var-cell>
             </var-paper>
@@ -628,16 +810,7 @@ const notAvailable = () => {
   max-width: 300px;
 }
 
-.select-list-bg {
-  width: 80px;
-}
 
-.select-list-theme {
-  width: 120px;
-}
-.select-list-lang {
-  width: 120px;
-}
 .settings-header {
   margin-bottom: 32px;
   margin-top: 16px;

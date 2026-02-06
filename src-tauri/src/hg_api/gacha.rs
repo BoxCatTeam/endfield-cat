@@ -10,7 +10,16 @@ macro_rules! log_dev {
     };
 }
 
-#[derive(Serialize)]
+fn normalize_provider(provider: Option<String>) -> Result<String, String> {
+    let raw = provider.unwrap_or_else(|| "hypergryph".to_owned());
+    let p = raw.trim().to_lowercase();
+    match p.as_str() {
+        "hypergryph" | "gryphline" => Ok(p),
+        _ => Err(format!("unsupported provider: {raw}")),
+    }
+}
+
+#[derive(Serialize, Clone)]
 pub struct GachaRecord {
     pub name: String,
     pub item_id: String,
@@ -31,10 +40,12 @@ pub async fn hg_fetch_char_records(
     server_id: String,
     pool_type: String,
     last_seq_id_stop: Option<String>,
+    provider: Option<String>,
 ) -> Result<Vec<GachaRecord>, String> {
     log_dev!("[hg-gacha] fetching char records: pool_type={}, stop_at={:?}", pool_type, last_seq_id_stop);
 
-    let url = "https://ef-webview.hypergryph.com/api/record/char";
+    let provider = normalize_provider(provider)?;
+    let url = format!("https://ef-webview.{provider}.com/api/record/char");
     let mut all_records = Vec::new();
     let mut next_seq_id: Option<String> = None;
 
@@ -52,7 +63,7 @@ pub async fn hg_fetch_char_records(
         log_dev!("[hg-gacha] fetching page seq_id={:?}", next_seq_id);
 
         let json = client
-            .get(url)
+            .get(&url)
             .query(&params)
             .send()
             .await
@@ -61,7 +72,9 @@ pub async fn hg_fetch_char_records(
             .await
             .map_err(|e| e.to_string())?;
 
-        let code = json_i64(&json, "code").unwrap_or(-1);
+        let code = json_i64(&json, "code")
+            .or_else(|| json_i64(&json, "status"))
+            .unwrap_or(-1);
         if code != 0 {
             let msg = json.get("msg").and_then(|v| v.as_str()).unwrap_or("获取寻访记录失败");
             return Err(msg.to_owned());
@@ -136,10 +149,12 @@ pub async fn hg_fetch_weapon_pools(
     client: tauri::State<'_, reqwest::Client>,
     token: String,
     server_id: String,
+    provider: Option<String>,
 ) -> Result<Vec<WeaponPool>, String> {
     log_dev!("[hg-gacha] fetching weapon pools");
 
-    let url = "https://ef-webview.hypergryph.com/api/record/weapon/pool";
+    let provider = normalize_provider(provider)?;
+    let url = format!("https://ef-webview.{provider}.com/api/record/weapon/pool");
     let params = [
         ("token", token),
         ("server_id", server_id),
@@ -147,7 +162,7 @@ pub async fn hg_fetch_weapon_pools(
     ];
 
     let json = client
-        .get(url)
+        .get(&url)
         .query(&params)
         .send()
         .await
@@ -156,7 +171,9 @@ pub async fn hg_fetch_weapon_pools(
         .await
         .map_err(|e| e.to_string())?;
 
-    let code = json_i64(&json, "code").unwrap_or(-1);
+    let code = json_i64(&json, "code")
+        .or_else(|| json_i64(&json, "status"))
+        .unwrap_or(-1);
     if code != 0 {
         let msg = json.get("msg").and_then(|v| v.as_str()).unwrap_or("获取武器池失败");
         return Err(msg.to_owned());
@@ -181,10 +198,12 @@ pub async fn hg_fetch_weapon_records(
     server_id: String,
     pool_id: String,
     last_seq_id_stop: Option<String>,
+    provider: Option<String>,
 ) -> Result<Vec<GachaRecord>, String> {
     log_dev!("[hg-gacha] fetching weapon records: pool_id={}, stop_at={:?}", pool_id, last_seq_id_stop);
 
-    let url = "https://ef-webview.hypergryph.com/api/record/weapon";
+    let provider = normalize_provider(provider)?;
+    let url = format!("https://ef-webview.{provider}.com/api/record/weapon");
     let mut all_records = Vec::new();
     let mut next_seq_id: Option<String> = None;
 
@@ -202,7 +221,7 @@ pub async fn hg_fetch_weapon_records(
         log_dev!("[hg-gacha] fetching weapon page seq_id={:?}", next_seq_id);
 
         let json = client
-            .get(url)
+            .get(&url)
             .query(&params)
             .send()
             .await
@@ -211,7 +230,9 @@ pub async fn hg_fetch_weapon_records(
             .await
             .map_err(|e| e.to_string())?;
 
-        let code = json_i64(&json, "code").unwrap_or(-1);
+        let code = json_i64(&json, "code")
+            .or_else(|| json_i64(&json, "status"))
+            .unwrap_or(-1);
         if code != 0 {
             let msg = json.get("msg").and_then(|v| v.as_str()).unwrap_or("获取武器记录失败");
             return Err(msg.to_owned());

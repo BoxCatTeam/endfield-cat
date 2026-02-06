@@ -11,19 +11,54 @@ macro_rules! log_dev {
     };
 }
 
+fn normalize_provider(provider: Option<String>) -> Result<String, String> {
+    let raw = provider.unwrap_or_else(|| "hypergryph".to_owned());
+    let p = raw.trim().to_lowercase();
+    match p.as_str() {
+        "hypergryph" | "gryphline" => Ok(p),
+        _ => Err(format!("unsupported provider: {raw}")),
+    }
+}
+
+fn app_code_by_provider(provider: &str) -> &'static str {
+    // Reference: endfield-gacha (hypergryph vs gryphline)
+    if provider == "gryphline" {
+        "3dacefa138426cfe"
+    } else {
+        "be36d44aa36bfb5b"
+    }
+}
+
 #[derive(Serialize)]
 pub struct HgExchangeResult {
     pub oauth_token: String,
     pub uids: Vec<String>,      // For API requests (bindingList[].uid)
     pub role_ids: Vec<String>,  // For display (bindingList[].roles[].roleId)
     pub nick_names: Vec<String>, // For display (bindingList[].roles[].nickName)
+    pub server_ids: Vec<String>, // For API requests (bindingList[].roles[].serverId)
+    pub server_names: Vec<String>, // For display (bindingList[].roles[].serverName)
+    pub channel_master_ids: Vec<Option<i64>>, // For display (bindingList[].channelMasterId)
+    pub bindings: Vec<BindingInfo>, // Structured binding info (uid + role)
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BindingInfo {
+    pub uid: String,
+    pub role_id: String,
+    pub nick_name: String,
+    pub server_id: String,
+    pub server_name: String,
+    pub channel_master_id: Option<i64>,
 }
 
 /// Extract (uids, role_ids, nick_names) from binding list
 /// - uids: bindingList[].uid - used for API requests
 /// - role_ids: bindingList[].roles[].roleId - used for display
 /// - nick_names: bindingList[].roles[].nickName - used for display
-fn extract_binding_info(binding_list_json: &Value) -> (Vec<String>, Vec<String>, Vec<String>) {
+/// - server_ids: bindingList[].roles[].serverId - used for API requests
+/// - server_names: bindingList[].roles[].serverName - used for display
+fn extract_binding_info(binding_list_json: &Value) -> Vec<BindingInfo> {
     // We use vectors to keep order consistent across uids/roles/nicks if possible, 
     // but the previous implementation used sets which destroys order relative to bindings?
     // Actually the previous implementation used BTreeSet which sorts them.
@@ -53,11 +88,11 @@ fn extract_binding_info(binding_list_json: &Value) -> (Vec<String>, Vec<String>,
     // For each role, we push (uid, role_id, nick_name).
     // This ensures they are aligned by index.
     
-    let mut results: Vec<(String, String, String)> = Vec::new();
+    let mut results: Vec<BindingInfo> = Vec::new();
 
     let Some(list) = binding_list_json.pointer("/data/list").and_then(|v| v.as_array()) else {
         log_dev!("[hg-exchange] no /data/list in binding response");
-        return (vec![], vec![], vec![]);
+        return Vec::new();
     };
 
     for app in list {
@@ -87,6 +122,11 @@ fn extract_binding_info(binding_list_json: &Value) -> (Vec<String>, Vec<String>,
                 continue;
             }
 
+            let channel_master_id = binding
+                .get("channelMasterId")
+                .or_else(|| binding.get("channel_master_id"))
+                .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
+
             let Some(roles) = binding.get("roles").and_then(|v| v.as_array()) else {
                 continue;
             };
@@ -102,22 +142,37 @@ fn extract_binding_info(binding_list_json: &Value) -> (Vec<String>, Vec<String>,
                     .and_then(|v| v.as_str())
                     .unwrap_or("").to_owned();
 
+                let server_id = role.get("serverId")
+                    .or_else(|| role.get("server_id"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("1")
+                    .to_owned();
+                
+                let server_name = role.get("serverName")
+                    .or_else(|| role.get("server_name"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_owned();
+
                 if !role_id.trim().is_empty() {
-                    results.push((uid.clone(), role_id, nick_name));
+                    results.push(BindingInfo {
+                        uid: uid.clone(),
+                        role_id,
+                        nick_name,
+                        server_id,
+                        server_name,
+                        channel_master_id,
+                    });
                 }
             }
         }
     }
-
-    let uids = results.iter().map(|(u, _, _)| u.clone()).collect();
-    let role_ids = results.iter().map(|(_, r, _)| r.clone()).collect();
-    let nick_names = results.iter().map(|(_, _, n)| n.clone()).collect();
     
-    (uids, role_ids, nick_names)
+    results
 }
 
 #[tauri::command]
-pub async fn hg_exchange_user_token(token: String) -> Result<HgExchangeResult, String> {
+pub async fn hg_exchange_user_token(token: String, provider: Option<String>) -> Result<HgExchangeResult, String> {
     let token = token.trim();
     log_dev!("[hg-exchange] called with token len={}", token.len());
 
@@ -125,16 +180,18 @@ pub async fn hg_exchange_user_token(token: String) -> Result<HgExchangeResult, S
         return Err("missing token".to_owned());
     }
 
+    let provider = normalize_provider(provider)?;
+
     let client = reqwest::Client::builder()
         .user_agent("endfield-cat")
         .build()
         .map_err(|e| e.to_string())?;
 
     let grant_json = client
-        .post("https://as.hypergryph.com/user/oauth2/v2/grant")
+        .post(format!("https://as.{provider}.com/user/oauth2/v2/grant"))
         .json(&serde_json::json!({
             "type": 1,
-            "appCode": "be36d44aa36bfb5b",
+            "appCode": app_code_by_provider(&provider),
             "token": token,
         }))
         .send()
@@ -172,7 +229,7 @@ pub async fn hg_exchange_user_token(token: String) -> Result<HgExchangeResult, S
     );
 
     let binding_json = client
-        .get("https://binding-api-account-prod.hypergryph.com/account/binding/v1/binding_list")
+        .get(format!("https://binding-api-account-prod.{provider}.com/account/binding/v1/binding_list"))
         .query(&[("token", oauth_token.as_str()), ("appCode", "endfield")])
         .send()
         .await
@@ -192,16 +249,32 @@ pub async fn hg_exchange_user_token(token: String) -> Result<HgExchangeResult, S
         return Err(msg.to_owned());
     }
 
-    let (uids, role_ids, nick_names) = extract_binding_info(&binding_json);
-    if uids.is_empty() {
+    let bindings = extract_binding_info(&binding_json);
+    if bindings.is_empty() {
         return Err("绑定列表中未解析到 uid".to_owned());
     }
 
-    Ok(HgExchangeResult { oauth_token, uids, role_ids, nick_names })
+    let uids = bindings.iter().map(|b| b.uid.clone()).collect();
+    let role_ids = bindings.iter().map(|b| b.role_id.clone()).collect();
+    let nick_names = bindings.iter().map(|b| b.nick_name.clone()).collect();
+    let server_ids = bindings.iter().map(|b| b.server_id.clone()).collect();
+    let server_names = bindings.iter().map(|b| b.server_name.clone()).collect();
+    let channel_master_ids = bindings.iter().map(|b| b.channel_master_id).collect();
+
+    Ok(HgExchangeResult {
+        oauth_token,
+        uids,
+        role_ids,
+        nick_names,
+        server_ids,
+        server_names,
+        channel_master_ids,
+        bindings,
+    })
 }
 
 #[tauri::command]
-pub async fn hg_u8_token_by_uid(uid: String, oauth_token: String) -> Result<String, String> {
+pub async fn hg_u8_token_by_uid(uid: String, oauth_token: String, provider: Option<String>) -> Result<String, String> {
     log_dev!("[hg-u8] called with uid={}, oauth_token len={}", uid, oauth_token.len());
     
     if uid.trim().is_empty() {
@@ -210,6 +283,8 @@ pub async fn hg_u8_token_by_uid(uid: String, oauth_token: String) -> Result<Stri
     if oauth_token.trim().is_empty() {
         return Err("missing oauth_token".to_owned());
     }
+
+    let provider = normalize_provider(provider)?;
 
     let client = reqwest::Client::builder()
         .user_agent("endfield-cat")
@@ -223,7 +298,7 @@ pub async fn hg_u8_token_by_uid(uid: String, oauth_token: String) -> Result<Stri
     log_dev!("[hg-u8] request body: {:?}", request_body);
 
     let u8_json = client
-        .post("https://binding-api-account-prod.hypergryph.com/account/binding/v1/u8_token_by_uid")
+        .post(format!("https://binding-api-account-prod.{provider}.com/account/binding/v1/u8_token_by_uid"))
         .json(&request_body)
         .send()
         .await

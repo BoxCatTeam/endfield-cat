@@ -4,6 +4,7 @@ import { StyleProvider, Themes } from "@varlet/ui";
 import { nekoTheme } from "./theme";
 import TitleBar from "./components/TitleBar.vue";
 import UpdateDialog from "./components/UpdateDialog.vue";
+import MetadataUpdateDialog from "./components/MetadataUpdateDialog.vue";
 import { useAppStore } from "./stores/app";
 import { useUpdaterStore } from "./stores/updater";
 import { useI18n } from "vue-i18n";
@@ -38,6 +39,11 @@ onMounted(async () => {
     } else {
       // 元数据正常后静默检查更新
       updaterStore.checkForUpdate(true);
+      
+      // 检查元数据是否有更新，如有则弹窗
+      if (appStore.isMetadataOutdated) {
+        appStore.showMetadataUpdateDialog = true;
+      }
     }
   } catch (error) {
     console.error("Failed to check metadata status:", error);
@@ -78,9 +84,10 @@ watch(() => appStore.language, (ver) => {
     <TitleBar />
     <div class="app-body">
       <router-view />
-    </div>
+  </div>
     
     <UpdateDialog />
+    <MetadataUpdateDialog />
   </div>
 </template>
 

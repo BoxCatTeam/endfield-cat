@@ -1,14 +1,21 @@
 import { defineStore } from "pinia";
 import { ref, computed, watch } from "vue";
 import { Snackbar } from "@varlet/ui";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { isSqliteAvailable } from "../db/db";
-import { deleteAccount, getAccountTokens, listAccounts } from "../db/accountDb";
-import { saveGachaRecords, listGachaPulls, deleteInvalidGachaRecords } from "../db/gachaDb";
+import { deleteAccount, listAccounts } from "../db/accountDb";
+import { listGachaPulls } from "../db/gachaDb";
+import {
+    checkMetadata,
+    syncGachaByToken,
+    syncGachaFromLog,
+} from "../api/tauriCommands";
 import type { BannerItem } from "../components/gacha/BannerCard.vue";
 import i18n from "../i18n";
+import { channelLabelKey } from "../utils/channelId";
 
 const { t } = i18n.global;
+
 
 type LocaleItem = { itemid?: string; name?: string };
 type LocaleNameMaps = { character: Map<string, string>; weapon: Map<string, string> };
@@ -41,11 +48,6 @@ export type BannerStats = {
     s5: number;
     s4: number;
     s3: number;
-};
-
-type WeaponPool = {
-    pool_id: string;
-    pool_name: string;
 };
 
 type IconGetter = (rec: GachaRecord) => string | undefined;
@@ -283,7 +285,7 @@ export const useGachaStore = defineStore("gacha", () => {
         if (metadataDirPromise) return metadataDirPromise;
         metadataDirPromise = (async () => {
             try {
-                const status = await invoke<{ path: string }>("check_metadata");
+                const status = await checkMetadata<{ path: string }>();
                 const baseDirRaw = status?.path || "";
                 if (!baseDirRaw) return;
                 metadataDir.value = baseDirRaw.replace(/^\\\\\?\\/, "").replace(/\\/g, "/");
@@ -296,6 +298,35 @@ export const useGachaStore = defineStore("gacha", () => {
 
     const localeMapsCache = new Map<string, Promise<LocaleNameMaps>>();
     const gachaPoolCache = new Map<string, Promise<GachaPoolEntry[]>>();
+    const manifestEntriesCache = new Map<string, Promise<Set<string>>>();
+
+    async function getManifestEntries(baseDir: string): Promise<Set<string>> {
+        if (manifestEntriesCache.has(baseDir)) return manifestEntriesCache.get(baseDir)!;
+
+        const promise = (async () => {
+            const manifestPath = `${baseDir}/manifest.json`;
+            try {
+                const url = convertFileSrc(manifestPath);
+                const res = await fetch(url);
+                if (!res.ok) return new Set<string>();
+                const json = await res.json();
+                const entries = Array.isArray(json?.entries) ? json.entries : [];
+                const set = new Set<string>();
+                for (const e of entries) {
+                    const p = typeof e?.path === "string" ? e.path.replace(/\\\\/g, "/") : null;
+                    if (p) set.add(p);
+                }
+                return set;
+            } catch (e) {
+                // manifest 缺失或解析失败时返回空集合，避免后续请求不存在的文件
+                return new Set<string>();
+            }
+        })();
+
+        manifestEntriesCache.set(baseDir, promise);
+        return promise;
+    }
+
     async function fetchLocaleList(baseDir: string, lang: string, fileNames: string[]) {
         const tryDirs = [
             `${baseDir}/locale/${lang}`,
@@ -360,11 +391,14 @@ export const useGachaStore = defineStore("gacha", () => {
         if (gachaPoolCache.has(cacheKey)) return gachaPoolCache.get(cacheKey)!;
 
         const promise = (async () => {
+            const manifestEntries = await getManifestEntries(baseDir);
             const tryLangs = [lang];
             if (lang !== "zh-CN") tryLangs.push("zh-CN");
 
             for (const l of tryLangs) {
-                const fullPath = `${baseDir}/locale/${l}/gacha_pool.json`;
+                const relPath = `locale/${l}/gacha_pool.json`;
+                if (!manifestEntries.has(relPath)) continue; // 避免请求不存在的文件导致 500
+                const fullPath = `${baseDir}/${relPath}`;
                 try {
                     const url = convertFileSrc(fullPath);
                     const res = await fetch(url);
@@ -447,7 +481,7 @@ export const useGachaStore = defineStore("gacha", () => {
                     const category = isWeapon(rec) ? "weapon" : "character";
                     const key = `${category}:${rec.item_id}`;
                     if (iconCache.has(key)) return iconCache.get(key);
-                    const fullPath = `${baseDir}/images/icon/${category}/${rec.item_id}.png`;
+                    const fullPath = `${baseDir}/images/${category}/icon/${rec.item_id}.png`;
                     try {
                         const url = convertFileSrc(fullPath);
                         iconCache.set(key, url);
@@ -574,10 +608,15 @@ export const useGachaStore = defineStore("gacha", () => {
         accountsList.value = accounts;
 
         // 优先展示游戏内角色 ID，缺失时退回 UID
-        uidOptions.value = accounts.map((a) => {
-            const label = a.roleId ? `${a.roleId}` : a.uid;
+        const accountOptions = accounts.map((a) => {
+            const roleLabel = a.roleId ? `${a.roleId}` : a.uid;
+            const labelKey = channelLabelKey(a.channelId, a.serverId);
+            const serverLabel = (labelKey ? t(labelKey) : "") || a.serverId || "";
+            const label = serverLabel ? `${roleLabel}(${serverLabel})` : roleLabel;
             return { label, value: a.uid };
         });
+
+        uidOptions.value = accountOptions;
 
         const nextUid =
             preferUid && uidOptions.value.some((o) => o.value === preferUid)
@@ -601,79 +640,13 @@ export const useGachaStore = defineStore("gacha", () => {
         }
         loading.value = true;
         try {
-            const account = await getAccountTokens(uid.value);
-            if (!account?.oauthToken) throw new Error(t("gacha.messages.missingToken"));
+            const res = await syncGachaByToken({ uid: uid.value, mode });
 
-            // 刷新 u8Token（有效期短）
-            const token = await invoke<string>("hg_u8_token_by_uid", {
-                uid: account.uid,
-                oauthToken: account.oauthToken,
-            });
-
-            const serverId = "1";
-
-            // 增量模式下记录每个卡池的最新 seq_id
-            const lastSeqMap = new Map<string, string>();
-            if (mode === "incremental") {
-                // 简单取最近 1000 条记录推断最新 seq_id
-                const pulls = await listGachaPulls(uid.value, 1000); // 取最近 1000 条足够
-                for (const p of pulls) {
-                    const key = p.poolType === "E_CharacterGachaPoolType_Weapon" ? p.bannerId : p.poolType;
-                    if (key && !lastSeqMap.has(key)) {
-                        lastSeqMap.set(key, p.seqId || "");
-                    }
-                }
-            }
-
-            console.log(`[gacha] refreshing mode=${mode}, lastSeqMap size=${lastSeqMap.size}`);
-
-            // 调用 Tauri 后端避免浏览器 CORS
-            const [charSpecial, charStandard, charBeginner] = await Promise.all([
-                invoke<GachaRecord[]>("hg_fetch_char_records", {
-                    token, serverId, poolType: "E_CharacterGachaPoolType_Special",
-                    lastSeqIdStop: lastSeqMap.get("E_CharacterGachaPoolType_Special")
-                }).catch((err: unknown) => { console.error("[gacha] charSpecial error:", err); return []; }),
-                invoke<GachaRecord[]>("hg_fetch_char_records", {
-                    token, serverId, poolType: "E_CharacterGachaPoolType_Standard",
-                    lastSeqIdStop: lastSeqMap.get("E_CharacterGachaPoolType_Standard")
-                }).catch((err: unknown) => { console.error("[gacha] charStandard error:", err); return []; }),
-                invoke<GachaRecord[]>("hg_fetch_char_records", {
-                    token, serverId, poolType: "E_CharacterGachaPoolType_Beginner",
-                    lastSeqIdStop: lastSeqMap.get("E_CharacterGachaPoolType_Beginner")
-                }).catch((err: unknown) => { console.error("[gacha] charBeginner error:", err); return []; }),
-            ]);
-
-            const pools = await invoke<WeaponPool[]>("hg_fetch_weapon_pools", { token, serverId })
-                .catch((err: unknown) => { console.error("[gacha] weaponPools error:", err); return []; });
-
-            const weaponRecordsPromise = pools.map(pool =>
-                invoke<GachaRecord[]>("hg_fetch_weapon_records", {
-                    token, serverId, poolId: pool.pool_id,
-                    lastSeqIdStop: lastSeqMap.get(pool.pool_id)
-                }).catch((err: unknown) => {
-                    console.error(`[gacha] weaponRecords error for pool ${pool.pool_name}:`, err);
-                    return [];
-                })
-            );
-
-            const weaponRecordsResults = await Promise.all(weaponRecordsPromise);
-            const weaponRecords = weaponRecordsResults.flat();
-
-            const allFetched = [...charBeginner, ...charSpecial, ...charStandard, ...weaponRecords];
-            if (allFetched.length > 0 && isSqliteAvailable()) {
-                try {
-                    if (mode === "full") {
-                        await deleteInvalidGachaRecords(uid.value);
-                    }
-                    await saveGachaRecords(uid.value, allFetched);
-                    Snackbar.success(mode === "incremental"
-                        ? t("gacha.messages.syncIncremental", { count: allFetched.length })
-                        : t("gacha.messages.syncFull"));
-                    await loadFromDb(uid.value);
-                } catch (e) {
-                    console.error(e);
-                    Snackbar.error(t("gacha.messages.saveFailed"));
-                }
+            if (res.count > 0 || res.accountUpdated) {
+                Snackbar.success(mode === "incremental"
+                    ? t("gacha.messages.syncIncremental", { count: res.count })
+                    : t("gacha.messages.syncFull"));
+                await loadFromDb(uid.value);
             } else {
                 Snackbar.info(t("gacha.messages.noNewRecords"));
             }
@@ -683,6 +656,39 @@ export const useGachaStore = defineStore("gacha", () => {
             loading.value = false;
         }
     }
+
+    async function refreshGachaFromLog(mode: "incremental" | "full" = "incremental") {
+        if (!isSqliteAvailable()) {
+            Snackbar.warning(t("gacha.messages.tauriOnly"));
+            return;
+        }
+        loading.value = true;
+        try {
+            const res = await syncGachaFromLog({ mode });
+
+            // 切换到同步的账户
+            if (res.uid) {
+                await reloadAccounts(res.uid);
+            }
+
+            if (res.count > 0) {
+                Snackbar.success(
+                    mode === "incremental"
+                        ? t("gacha.messages.syncIncremental", { count: res.count })
+                        : t("gacha.messages.syncFull"),
+                );
+                await loadFromDb(res.uid);
+            } else {
+                Snackbar.info(t("gacha.messages.noNewRecords"));
+            }
+        } catch (err) {
+            Snackbar.error((err as Error)?.message ?? String(err));
+        } finally {
+            loading.value = false;
+        }
+    }
+
+    const canDeleteCurrentAccount = computed(() => !!uid.value && accountsList.value.some((a) => a.uid === uid.value));
 
     async function deleteCurrentAccount() {
         if (!uid.value) {
@@ -709,7 +715,9 @@ export const useGachaStore = defineStore("gacha", () => {
         bannerSummary,
         reloadAccounts, // 提供给初始化或手动刷新调用
         refreshGacha,
+        refreshGachaFromLog,
         deleteCurrentAccount,
         currentNickname,
+        canDeleteCurrentAccount,
     };
 });

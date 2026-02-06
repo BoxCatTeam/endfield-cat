@@ -1,4 +1,4 @@
-use crate::services::{config, metadata, release, update};
+use crate::services::{config, metadata, mirror, release, update};
 use tauri::{AppHandle, Emitter, State};
 
 #[tauri::command]
@@ -85,19 +85,22 @@ pub async fn reset_metadata(
 #[tauri::command]
 pub async fn update_metadata(
     window: tauri::Window,
+    app: AppHandle,
     client: State<'_, reqwest::Client>,
     base_url: Option<String>,
-    version: Option<String>,
 ) -> Result<metadata::MetadataStatus, String> {
     let exe_dir = exe_dir()?;
+    
+    // Use app version for metadata URL
+    let app_version = app.package_info().version.to_string();
 
     metadata::update_metadata(
         &exe_dir,
         &client,
         base_url,
-        version,
+        Some(app_version),
         |progress| {
-            let _ = window.emit("metadata-progress", progress);
+            let _ = window.emit("metadata-update-progress", progress);
         },
     )
     .await
@@ -130,7 +133,11 @@ pub async fn download_and_apply_update(
 
     let paths = update::prepare_paths(exe_name)?;
 
-    update::download_new_exe(&client, &download_url, &paths.new_exe, |p| {
+    // 读取镜像配置并转换 URL
+    let mirror_config = mirror::read_mirror_config(&exe_dir);
+    let actual_download_url = mirror_config.transform_url(&download_url);
+
+    update::download_new_exe(&client, &actual_download_url, &paths.new_exe, |p| {
         emit_progress("downloading", p);
     }).await?;
 
@@ -158,4 +165,29 @@ pub async fn download_and_apply_update(
 
     app.exit(0);
     Ok(())
+}
+
+/// 测试 GitHub 镜像连通性，返回延迟毫秒数
+#[tauri::command]
+pub async fn test_github_mirror(
+    client: State<'_, reqwest::Client>,
+    mirror_url_template: String,
+) -> Result<u64, String> {
+    // 使用一个小的 GitHub 文件测试连通性
+    let test_url = "https://raw.githubusercontent.com/BoxCatTeam/endfield-cat/master/package.json";
+    let proxied_url = mirror_url_template.replace("{url}", test_url);
+
+    let start = std::time::Instant::now();
+    let resp = client
+        .head(&proxied_url)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+
+    Ok(start.elapsed().as_millis() as u64)
 }

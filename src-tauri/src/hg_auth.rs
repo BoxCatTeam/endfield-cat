@@ -13,8 +13,71 @@ macro_rules! log_dev {
     };
 }
 
-const HG_LOGIN_URL: &str = "https://user.hypergryph.com/";
-const HG_TOKEN_URL: &str = "https://web-api.hypergryph.com/account/info/hg";
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LoginProvider {
+    Hypergryph,
+    Gryphline,
+}
+
+fn normalize_provider(provider: Option<String>) -> Result<LoginProvider, String> {
+    let raw = provider.unwrap_or_else(|| "hypergryph".to_owned());
+    let p = raw.trim().to_lowercase();
+    match p.as_str() {
+        "hypergryph" => Ok(LoginProvider::Hypergryph),
+        "gryphline" => Ok(LoginProvider::Gryphline),
+        _ => Err(format!("unsupported provider: {raw}")),
+    }
+}
+
+fn provider_login_url(provider: LoginProvider) -> &'static str {
+    match provider {
+        LoginProvider::Hypergryph => "https://user.hypergryph.com/",
+        LoginProvider::Gryphline => "https://user.gryphline.com/login",
+    }
+}
+
+fn provider_userinfo_url(provider: LoginProvider) -> &'static str {
+    match provider {
+        LoginProvider::Hypergryph => "https://user.hypergryph.com/userInfo",
+        LoginProvider::Gryphline => "https://user.gryphline.com/userInfo",
+    }
+}
+
+fn provider_token_url(provider: LoginProvider) -> &'static str {
+    match provider {
+        LoginProvider::Hypergryph => "https://web-api.hypergryph.com/account/info/hg",
+        LoginProvider::Gryphline => "https://web-api.gryphline.com/cookie_store/account_token",
+    }
+}
+
+fn provider_id(provider: LoginProvider) -> u64 {
+    match provider {
+        LoginProvider::Hypergryph => 0,
+        LoginProvider::Gryphline => 1,
+    }
+}
+
+fn host_allowed(provider: LoginProvider, host: &str) -> bool {
+    match provider {
+        LoginProvider::Hypergryph => host.contains("hypergryph.com") || host.contains("hycdn.cn"),
+        LoginProvider::Gryphline => host.contains("gryphline.com") || host.contains("hg-cdn.com"),
+    }
+}
+
+fn is_userinfo_request(provider: LoginProvider, host: &str, path: &str) -> bool {
+    match provider {
+        LoginProvider::Hypergryph => host.contains("user.hypergryph.com") && path.starts_with("/userInfo"),
+        LoginProvider::Gryphline => host.contains("user.gryphline.com") && path.starts_with("/userInfo"),
+    }
+}
+
+fn is_token_request(provider: LoginProvider, host: &str, path: &str) -> bool {
+    match provider {
+        LoginProvider::Hypergryph => host.contains("web-api.hypergryph.com") && path.starts_with("/account/info/hg"),
+        LoginProvider::Gryphline => host.contains("web-api.gryphline.com") && path.starts_with("/cookie_store/account_token"),
+    }
+}
+
 const ENDCAT_SCHEME: &str = "endcat";
 const AUTH_UA: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0";
@@ -27,62 +90,69 @@ fn clear_hg_webview(win: &WebviewWindow) {
         "try { localStorage.clear?.(); sessionStorage.clear?.(); if (window.indexedDB?.databases) { indexedDB.databases().then(dbs => dbs.forEach(db => indexedDB.deleteDatabase(db.name))).catch(() => {}); } } catch (_) {}",
     );
 }
-const HG_AUTH_INIT_JS: &str = r#"
-(() => {
+fn auth_init_js(provider: LoginProvider) -> String {
+    let userinfo_url = provider_userinfo_url(provider);
+    let token_url = provider_token_url(provider);
+
+    format!(
+        r#"
+(() => {{
   // Minimal auto-token extraction script
   // Does NOT modify DOM or add overlays - just monitors URL and extracts token
-  const USERINFO_URL = 'https://user.hypergryph.com/userInfo';
-  const TOKEN_URL = 'https://web-api.hypergryph.com/account/info/hg';
+  const USERINFO_URL = '{userinfo_url}';
+  const TOKEN_URL = '{token_url}';
   let redirected = false;
   let extracted = false;
 
-  function extractToken() {
+  function extractToken() {{
     if (extracted) return;
     if (!location.href.startsWith(TOKEN_URL)) return;
-    
+
     const text = document.body?.innerText || '';
     if (!text || text.trim().length < 2) return;
-    
-    try {
+
+    try {{
       const json = JSON.parse(text);
       const token = json?.token || json?.data?.token || json?.data?.content || json?.content || '';
-      if (token && typeof token === 'string' && token.trim()) {
+      if (token && typeof token === 'string' && token.trim()) {{
         extracted = true;
         console.log('[hg-auth] token extracted, sending to app');
         location.href = 'endcat://hg-auto-token?token=' + encodeURIComponent(token);
-      }
-    } catch (e) {
+      }}
+    }} catch (e) {{
       console.log('[hg-auth] parse token failed', e);
-    }
-  }
+    }}
+  }}
 
-  function checkAndRedirect() {
+  function checkAndRedirect() {{
     // When on userInfo page, redirect to token URL
-    if (!redirected && location.href.startsWith(USERINFO_URL)) {
+    if (!redirected && location.href.startsWith(USERINFO_URL)) {{
       redirected = true;
       console.log('[hg-auth] detected userInfo, redirecting to token URL');
       location.href = TOKEN_URL;
       return;
-    }
+    }}
     // When on token URL, extract token
     extractToken();
-  }
+  }}
 
-  function tick() {
+  function tick() {{
     checkAndRedirect();
-    if (!extracted) {
+    if (!extracted) {{
       setTimeout(tick, 500);
-    }
-  }
+    }}
+  }}
 
   // Start monitoring after DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', tick, { once: true });
-  } else {
+  if (document.readyState === 'loading') {{
+    document.addEventListener('DOMContentLoaded', tick, {{ once: true }});
+  }} else {{
     tick();
-  }
-})();
-"#;
+  }}
+}})();
+"#
+    )
+}
 
 #[cfg(target_os = "windows")]
 fn maybe_set_disable_gpu() {
@@ -123,7 +193,7 @@ fn maybe_set_disable_gpu() {
 #[cfg(not(target_os = "windows"))]
 fn maybe_set_disable_gpu() {}
 
-async fn fetch_token_with_cookie(cookie_header: String) -> Option<String> {
+async fn fetch_token_with_cookie(cookie_header: String, provider: LoginProvider) -> Option<String> {
     log_dev!(
         "[hg-auth] fetch_token_with_cookie: len={} preview={}",
         cookie_header.len(),
@@ -139,8 +209,10 @@ async fn fetch_token_with_cookie(cookie_header: String) -> Option<String> {
         .build()
         .ok()?;
 
+    let token_url = provider_token_url(provider);
+
     let res = client
-        .get(HG_TOKEN_URL)
+        .get(token_url)
         .header(reqwest::header::COOKIE, cookie_header)
         .send()
         .await
@@ -185,24 +257,34 @@ fn now_millis() -> u64 {
 static LAST_COOKIE_FETCH_MS: AtomicU64 = AtomicU64::new(0);
 static LAST_REQ_LOG_MS: AtomicU64 = AtomicU64::new(0);
 static LAST_USERINFO_NAV_MS: AtomicU64 = AtomicU64::new(0);
+static LAST_LOGIN_PROVIDER: AtomicU64 = AtomicU64::new(0);
 
-fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
+fn open_hg_auth_window(app: &AppHandle, provider: LoginProvider) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("hg-auth") {
-        let _ = win.show();
-        let _ = win.set_focus();
-        if cfg!(debug_assertions) {
-            let _ = win.eval(
-                "try { window.__TAURI_INTERNALS__?.invoke?.('plugin:webview|internal_toggle_devtools'); } catch (_) {}",
-            );
+        let desired = provider_id(provider);
+        let last = LAST_LOGIN_PROVIDER.load(Ordering::Relaxed);
+        if last == desired {
+            let _ = win.show();
+            let _ = win.set_focus();
+            if cfg!(debug_assertions) {
+                let _ = win.eval(
+                    "try { window.__TAURI_INTERNALS__?.invoke?.('plugin:webview|internal_toggle_devtools'); } catch (_) {}",
+                );
+            }
+            return Ok(());
         }
-        return Ok(());
+        // Provider changed: rebuild webview to update init script & domains.
+        clear_hg_webview(&win);
+        let _ = win.close();
     }
 
     maybe_set_disable_gpu();
 
-    let login_url = Url::parse(HG_LOGIN_URL).map_err(|e| e.to_string())?;
+    let login_url_str = provider_login_url(provider);
+    let login_url = Url::parse(login_url_str).map_err(|e| e.to_string())?;
     let login_url_str = login_url.to_string();
     let app_for_nav = app.clone();
+    let provider_for_nav = provider;
 
     log_dev!(
         "[hg-auth] building webview: target={}, gpu_flag={:?}",
@@ -211,6 +293,10 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
     );
 
     let app_for_req = app.clone();
+    let provider_for_req = provider;
+    let token_url_for_req = provider_token_url(provider).to_string();
+    let init_js = auth_init_js(provider);
+
     let mut builder = WebviewWindowBuilder::new(app, "hg-auth", WebviewUrl::External(login_url.clone()))
         .title("获取 token")
         .inner_size(375.0, 650.0)
@@ -218,21 +304,19 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
         .decorations(true)
         .closable(true)
         .user_agent(AUTH_UA)
-        .initialization_script_for_all_frames(HG_AUTH_INIT_JS)
+        .initialization_script_for_all_frames(init_js)
         .on_web_resource_request(move |request, _response| {
             let uri = request.uri();
             let host = uri.host().unwrap_or_default();
             if host.is_empty() {
                 return;
             }
-            // Only watch Hypergryph domains.
-            if !(host.contains("hypergryph.com") || host.contains("hycdn.cn")) {
+            if !host_allowed(provider_for_req, host) {
                 return;
             }
 
             let path = uri.path();
-            let is_token_req =
-                host.contains("web-api.hypergryph.com") && path.starts_with("/account/info/hg");
+            let is_token_req = is_token_request(provider_for_req, host, path);
 
             // Periodic debug log so we know the hook is firing.
             let log_now = now_millis();
@@ -244,13 +328,16 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
             // Throttle to avoid hammering.
             let now = now_millis();
             // If we've already landed on userInfo, force a token fetch by jumping to the token URL from inside the webview.
-            if host.contains("user.hypergryph.com") && path.starts_with("/userInfo") {
+            if is_userinfo_request(provider_for_req, host, path) {
                 let last_nav = LAST_USERINFO_NAV_MS.load(Ordering::Relaxed);
                 if now.saturating_sub(last_nav) > 1200 {
                     LAST_USERINFO_NAV_MS.store(now, Ordering::Relaxed);
                     log_dev!("[hg-auth] detected userInfo navigation, forcing token URL");
                     if let Some(win) = app_for_req.get_webview_window("hg-auth") {
-                        let _ = win.eval("try { location.href = 'https://web-api.hypergryph.com/account/info/hg'; } catch (_) {}");
+                        let _ = win.eval(&format!(
+                            "try {{ location.href = '{}'; }} catch (_) {{}}",
+                            token_url_for_req
+                        ));
                     }
                 }
             }
@@ -287,7 +374,7 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
             );
             let app_for_fetch = app_for_req.clone();
             tauri::async_runtime::spawn(async move {
-                if let Some(token) = fetch_token_with_cookie(cookies_combined).await {
+                if let Some(token) = fetch_token_with_cookie(cookies_combined, provider_for_req).await {
                     let _ = app_for_fetch.emit_to("main", "hg:auto-token", token);
                     if let Some(win) = app_for_fetch.get_webview_window("hg-auth") {
                         clear_hg_webview(&win);
@@ -306,7 +393,7 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
 
             if host == "hg-login" {
                 if let Some(win) = app_for_nav.get_webview_window("hg-auth") {
-                    if let Ok(url) = Url::parse(HG_LOGIN_URL) {
+                    if let Ok(url) = Url::parse(provider_login_url(provider_for_nav)) {
                         let _ = win.navigate(url);
                     }
                 }
@@ -334,8 +421,9 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
                     .unwrap_or_default();
                 if !cookies.trim().is_empty() {
                     let app_for_fetch = app_for_nav.clone();
+                    let provider_for_fetch = provider_for_nav;
                     tauri::async_runtime::spawn(async move {
-                        if let Some(token) = fetch_token_with_cookie(cookies).await {
+                        if let Some(token) = fetch_token_with_cookie(cookies, provider_for_fetch).await {
                             let _ = app_for_fetch.emit_to("main", "hg:auto-token", token);
                             if let Some(win) = app_for_fetch.get_webview_window("hg-auth") {
                                 clear_hg_webview(&win);
@@ -364,6 +452,7 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
     builder = builder.devtools(cfg!(debug_assertions));
 
     let win = builder.build().map_err(|e| e.to_string())?;
+    LAST_LOGIN_PROVIDER.store(provider_id(provider), Ordering::Relaxed);
 
     match win.navigate(login_url) {
         Ok(()) => log_dev!("[hg-auth] navigate() issued to {}", login_url_str),
@@ -371,9 +460,10 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
     }
 
     // Fallback: if stuck on about:blank, navigate to login page
-    let _ = win.eval(
-        "setTimeout(() => { try { if (!location.href || location.href === 'about:blank') { location.href = 'https://user.hypergryph.com/'; } } catch (e) { console.error('force nav failed', e); } }, 400);",
-    );
+    let _ = win.eval(&format!(
+        "setTimeout(() => {{ try {{ if (!location.href || location.href === 'about:blank') {{ location.href = '{}'; }} }} catch (e) {{ console.error('force nav failed', e); }} }}, 400);",
+        provider_login_url(provider)
+    ));
     let _ = win.eval(
         "setInterval(() => { try { console.log('[hg-auth] heartbeat', location.href, document.readyState); } catch (_) {} }, 3000);",
     );
@@ -387,10 +477,11 @@ fn open_hg_auth_window(app: &AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn hg_open_token_webview(app: AppHandle) -> Result<(), String> {
+pub async fn hg_open_token_webview(app: AppHandle, provider: Option<String>) -> Result<(), String> {
+    let provider = normalize_provider(provider)?;
     let handle = app.clone();
     app.run_on_main_thread(move || {
-        if let Err(e) = open_hg_auth_window(&handle) {
+        if let Err(e) = open_hg_auth_window(&handle, provider) {
             log_dev!("[hg-auth] open window failed: {e}");
         }
     })
@@ -411,14 +502,15 @@ pub fn hg_close_token_webview(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn hg_push_cookies(app: AppHandle, cookie: String) -> Result<(), String> {
+pub async fn hg_push_cookies(app: AppHandle, cookie: String, provider: Option<String>) -> Result<(), String> {
     if cookie.trim().is_empty() {
         return Err("cookie is empty".into());
     }
+    let provider = normalize_provider(provider)?;
     log_dev!("[hg-auth] hg_push_cookies len={}", cookie.len());
     let app_for_fetch = app.clone();
     tauri::async_runtime::spawn(async move {
-        if let Some(token) = fetch_token_with_cookie(cookie).await {
+        if let Some(token) = fetch_token_with_cookie(cookie, provider).await {
             let _ = app_for_fetch.emit_to("main", "hg:auto-token", token);
             if let Some(win) = app_for_fetch.get_webview_window("hg-auth") {
                 clear_hg_webview(&win);

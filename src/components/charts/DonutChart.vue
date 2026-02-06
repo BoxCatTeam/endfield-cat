@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import "../../charts/echarts";
 
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, nextTick } from "vue";
 import VChart from "vue-echarts";
 import { useI18n } from 'vue-i18n';
 
@@ -19,6 +19,8 @@ const props = defineProps<{
 }>();
 
 const root = ref<HTMLElement | null>(null);
+const ready = ref(false);
+const resizeObserver = ref<ResizeObserver | null>(null);
 
 function readCssVar(el: HTMLElement, name: string) {
   return getComputedStyle(el).getPropertyValue(name).trim();
@@ -44,8 +46,26 @@ onMounted(() => {
     s4: s4 || colors.value.s4,
     s3: s3 || colors.value.s3,
   };
+
+  const updateReady = () => {
+    if (!root.value) return;
+    const { clientWidth, clientHeight } = root.value;
+    ready.value = clientWidth > 0 && clientHeight > 0;
+  };
+
+  // 初始时和后续尺寸变化时再创建图表，避免容器尺寸为 0 触发 ECharts 警告
+  nextTick(updateReady);
+
+  if (root.value) {
+    const observer = new ResizeObserver(() => updateReady());
+    resizeObserver.value = observer;
+    observer.observe(root.value);
+  }
 });
 
+onUnmounted(() => {
+  resizeObserver.value?.disconnect();
+});
 const { t } = useI18n();
 
 const option = computed(() => ({
@@ -83,7 +103,7 @@ const sizeStyle = computed(() => {
 
 <template>
   <div ref="root" class="root" :style="sizeStyle">
-    <VChart class="chart" :option="option" autoresize :style="sizeStyle" />
+    <VChart v-if="ready" class="chart" :option="option" autoresize :style="sizeStyle" />
   </div>
 </template>
 

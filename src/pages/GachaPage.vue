@@ -4,6 +4,7 @@ import { Snackbar } from "@varlet/ui";
 import { isSqliteAvailable } from "../db/db";
 import BannerCard from "../components/gacha/BannerCard.vue";
 import AddAccountDialog from "../components/gacha/AddAccountDialog.vue";
+import SplitButtonSelect from "../components/SplitButtonSelect.vue";
 import { useGachaStore } from "../stores/gacha";
 import { useI18n } from 'vue-i18n'
 
@@ -57,6 +58,9 @@ onMounted(() => {
               <var-cell ripple @click="store.refreshGacha('full')">
                 {{ t('gacha.refreshFull') }}
               </var-cell>
+              <var-cell ripple @click="store.refreshGachaFromLog('incremental')">
+                {{ t('gacha.refreshFromLog') }}
+              </var-cell>
             </template>
           </var-menu>
           <var-button text @click="notAvailable">
@@ -68,17 +72,13 @@ onMounted(() => {
         </var-space>
 
         <var-space align="center" :wrap="false" :size="6">
-          <span v-if="store.currentNickname" class="nickname">{{ store.currentNickname }}</span>
-          <var-select
+          <SplitButtonSelect
             v-model="store.uid"
-            class="uid"
-            variant="outlined"
-            size="small"
-            :placeholder="store.uidOptions.length === 0 ? t('gacha.noAccount') : ''"
             :options="store.uidOptions"
             :disabled="store.uidOptions.length === 0"
+            :placeholder="t('gacha.noAccount')"
           />
-          <var-button text class="danger" :disabled="!store.uid" @click="store.deleteCurrentAccount">
+          <var-button text class="danger" :disabled="!store.canDeleteCurrentAccount" @click="store.deleteCurrentAccount">
             <var-icon name="trash-can-outline" />
           </var-button>
           <var-button text @click="openAddAccountDialog">
@@ -94,11 +94,20 @@ onMounted(() => {
         @success="onAccountAdded"
       />
 
-      <var-collapse v-model="store.opened" class="collapse" :divider="false" :elevation="false">
+      <var-collapse v-if="store.bannerSummary.length > 0" v-model="store.opened" class="collapse" :divider="false" :elevation="false">
         <var-collapse-item v-for="banner in store.bannerSummary" :key="banner.id" :name="banner.id" :title="banner.title">
           <BannerCard :banner="banner" :donut-size="donutSize" />
         </var-collapse-item>
       </var-collapse>
+
+      <var-result
+          v-else-if="store.uid && !store.loading"
+          type="empty"
+          class="empty-state"
+          :title="t('gacha.messages.noRecords')"
+          :description="t('gacha.messages.noRecordsHint')"
+      >
+      </var-result>
     </div>
   </section>
 </template>
@@ -153,37 +162,7 @@ onMounted(() => {
   width: 100%;
 }
 
-.uid {
-  width: 120px;
-  font-size: 14px;
-  --field-decorator-outlined-small-padding-left: 8px;
-  --field-decorator-outlined-small-padding-right: 6px;
-  --field-decorator-placeholder-size: 14px;
-  --select-label-font-size: 14px;
-  --select-arrow-size: 16px;
-  --option-font-size: 14px;
-  --select-font-size: 14px;
-}
 
-.uid :deep(.var-select__select) {
-  word-break: normal;
-  font-size: 14px;
-  /* 确保文字颜色正确，防止继承导致的透明度问题 */
-  color: var(--color-text);
-}
-
-/* 强制修复 outlined 模式下没有 label 时出现的边框缺口 */
-.uid :deep(fieldset legend) {
-  width: 0 !important;
-  padding: 0 !important;
-}
-
-.uid :deep(.var-select__label) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .nickname {
   font-size: 14px;
@@ -215,5 +194,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.empty-state {
+  margin-top: 80px;
 }
 </style>

@@ -1,7 +1,13 @@
 import i18n from "../i18n";
 
 const { t } = i18n.global;
-const API_HOST = "https://ef-webview.hypergryph.com";
+
+export type HgProvider = "hypergryph" | "gryphline";
+
+function apiHostByProvider(provider?: HgProvider) {
+  return provider === "gryphline" ? "https://ef-webview.gryphline.com" : "https://ef-webview.hypergryph.com";
+}
+
 const CHAR_ENDPOINT = "/api/record/char";
 const WEAPON_POOL_ENDPOINT = "/api/record/weapon/pool";
 const WEAPON_RECORD_ENDPOINT = "/api/record/weapon";
@@ -26,9 +32,10 @@ export async function fetchCharRecords(params: {
   serverId: string;
   poolType: string;
   seqId?: string;
+  provider?: HgProvider;
 }) {
-  const { token, serverId, poolType, seqId } = params;
-  const url = new URL(API_HOST + CHAR_ENDPOINT);
+  const { token, serverId, poolType, seqId, provider } = params;
+  const url = new URL(apiHostByProvider(provider) + CHAR_ENDPOINT);
   url.searchParams.set("token", token);
   url.searchParams.set("server_id", serverId);
   url.searchParams.set("lang", "zh-cn");
@@ -49,9 +56,9 @@ export async function fetchCharRecords(params: {
   }));
 }
 
-export async function fetchWeaponPools(params: { token: string; serverId: string }) {
-  const { token, serverId } = params;
-  const url = new URL(API_HOST + WEAPON_POOL_ENDPOINT);
+export async function fetchWeaponPools(params: { token: string; serverId: string; provider?: HgProvider }) {
+  const { token, serverId, provider } = params;
+  const url = new URL(apiHostByProvider(provider) + WEAPON_POOL_ENDPOINT);
   url.searchParams.set("token", token);
   url.searchParams.set("server_id", serverId);
   url.searchParams.set("lang", "zh-cn");
@@ -67,9 +74,10 @@ export async function fetchWeaponRecords(params: {
   serverId: string;
   poolId: string;
   seqId?: string;
+  provider?: HgProvider;
 }) {
-  const { token, serverId, poolId, seqId } = params;
-  const url = new URL(API_HOST + WEAPON_RECORD_ENDPOINT);
+  const { token, serverId, poolId, seqId, provider } = params;
+  const url = new URL(apiHostByProvider(provider) + WEAPON_RECORD_ENDPOINT);
   url.searchParams.set("token", token);
   url.searchParams.set("server_id", serverId);
   url.searchParams.set("pool_id", poolId);

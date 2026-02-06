@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { Snackbar } from "@varlet/ui";
 import { listen } from "@tauri-apps/api/event";
 import { isSqliteAvailable } from "../../db/db";
-import { upsertAccount } from "../../db/accountDb";
-import { useI18n } from 'vue-i18n';
-import { exchangeHgUserToken, getHgU8TokenByUid, openHgTokenWebview } from "../../api/tauriCommands";
+import { openHgTokenWebview } from "../../api/tauriCommands";
+import { useI18n } from "vue-i18n";
+// import type { HgProvider } from "../../api/tauriCommands"; // HgProvider is used in props, keep it?
+import { addAccountByToken } from "../../api/tauriCommands";
+import type { HgProvider } from "../../api/tauriCommands";
 
 const { t } = useI18n();
-
-type SelectOption = { label: string; value: string };
 
 const props = defineProps<{
   show: boolean;
@@ -21,26 +21,33 @@ const emit = defineEmits<{
 }>();
 
 const addAccountInput = ref("");
-const addAccountStep = ref<"token" | "uid">("token");
 const addAccountLoading = ref(false);
 const addAccountWebviewLoading = ref(false);
-const addAccountOauthToken = ref("");
-const addAccountUidOptions = ref<SelectOption[]>([]);
-const addAccountSelectedUid = ref("");
+const provider = ref<HgProvider>("hypergryph");
 
-const addAccountConfirmDisabled = computed(() => {
-  if (addAccountStep.value === "token") return !addAccountInput.value.trim();
-  return !addAccountSelectedUid.value;
-});
+
+const providerHelpText = computed(() =>
+  provider.value === "gryphline"
+    ? t("gacha.addAccount.helpGryphline")
+    : t("gacha.addAccount.helpHypergryph")
+);
+
+const providerLoginBtnText = computed(() =>
+  provider.value === "gryphline"
+    ? t("gacha.addAccount.loginBtnGryphline")
+    : t("gacha.addAccount.loginBtnHypergryph")
+);
+
+const addAccountConfirmDisabled = computed(
+  () => addAccountLoading.value || !addAccountInput.value.trim()
+);
 
 function handleClose() {
   emit("update:show", false);
   // 重置对话框状态
   addAccountInput.value = "";
-  addAccountStep.value = "token";
-  addAccountOauthToken.value = "";
-  addAccountUidOptions.value = [];
-  addAccountSelectedUid.value = "";
+  addAccountLoading.value = false;
+  addAccountWebviewLoading.value = false;
 }
 
 function normalizeUserToken(input: string): string | null {
@@ -61,102 +68,45 @@ function normalizeUserToken(input: string): string | null {
 async function startWebviewTokenFlow() {
   addAccountWebviewLoading.value = true;
   try {
-    await openHgTokenWebview();
+    await openHgTokenWebview(provider.value);
   } catch (err) {
-    Snackbar.error((err as Error)?.message ?? t('gacha.addAccount.openLoginError'));
+    Snackbar.error((err as Error)?.message ?? t("gacha.addAccount.openLoginError"));
   } finally {
     addAccountWebviewLoading.value = false;
   }
 }
 
 async function onAddAccountConfirm() {
-  if (addAccountStep.value === "token") {
-    const userToken = normalizeUserToken(addAccountInput.value);
-    if (!userToken) {
-      Snackbar.warning(t('gacha.addAccount.invalidToken'));
-      return;
-    }
-
-    addAccountLoading.value = true;
-    try {
-      const res = await exchangeHgUserToken(userToken);
-
-      addAccountOauthToken.value = res.oauth_token;
-      const uids = res.uids ?? [];
-      const roleIds = res.role_ids ?? [];
-      const nickNames = res.nick_names ?? [];
-
-      if (uids.length === 0) {
-        throw new Error(t('gacha.addAccount.noUid'));
-      }
-
-      // 填充账号选项
-      addAccountUidOptions.value = uids.map((uid, i) => {
-        const roleId = roleIds[i] ?? uid;
-        const nickName = nickNames[i] ?? "";
-        const label = nickName ? `${nickName}(${roleId})` : roleId;
-        return { label, value: uid };
-      });
-      addAccountSelectedUid.value = uids[0];
-
-      if (uids.length > 1) {
-        addAccountStep.value = "uid";
-        return;
-      }
-
-      // 仅有一个 UID 时直接完成
-      await finalizeAddAccount(userToken, uids[0], roleIds[0] || uids[0], nickNames[0] || "", res.oauth_token);
-      handleClose();
-    } catch (err) {
-      Snackbar.error((err as Error)?.message ?? String(err));
-    } finally {
-      addAccountLoading.value = false;
-    }
-  } else {
-    // UID 选择步骤
-    addAccountLoading.value = true;
-    try {
-      const userToken = normalizeUserToken(addAccountInput.value)!;
-      // 再次换取 token，确保取到最新元数据
-      const res = await exchangeHgUserToken(userToken);
-
-      const idx = res.uids.findIndex(u => u === addAccountSelectedUid.value);
-      if (idx === -1) throw new Error(t('gacha.addAccount.invalidUid'));
-
-      await finalizeAddAccount(
-        userToken,
-        addAccountSelectedUid.value,
-        res.role_ids[idx] || addAccountSelectedUid.value,
-        res.nick_names[idx] || "",
-        res.oauth_token
-      );
-      handleClose();
-    } catch (err) {
-      Snackbar.error((err as Error)?.message ?? String(err));
-    } finally {
-      addAccountLoading.value = false;
-    }
+  const userToken = normalizeUserToken(addAccountInput.value);
+  if (!userToken) {
+    Snackbar.warning(t("gacha.addAccount.invalidToken"));
+    return;
   }
-}
 
-async function finalizeAddAccount(userToken: string, uidValue: string, roleId: string, nickName: string, oauthToken: string) {
-  const u8Token = await getHgU8TokenByUid({
-    uid: uidValue,
-    oauthToken: oauthToken,
-  });
-
-  await upsertAccount({
-    uid: uidValue,
-    roleId,
-    nickName,
-    userToken,
-    oauthToken,
-    u8Token,
-  });
-
-  emit("success", uidValue);
-  const display = nickName ? `${nickName}(${roleId})` : roleId;
-  Snackbar.success(t('gacha.addAccount.success', { name: display }));
+  addAccountLoading.value = true;
+  try {
+    const res = await addAccountByToken({ userToken, provider: provider.value });
+    
+    if (res.accounts && res.accounts.length > 0) {
+        const added = res.accounts;
+        const names = added.map(a => a.serverId ? `${a.nickName}(${a.roleId}) · ${a.serverId}` : `${a.nickName}(${a.roleId})`).join("、");
+        const count = added.length;
+        
+        Snackbar.success(
+            count === 1
+            ? t("gacha.addAccount.success", { name: names })
+            : t("gacha.addAccount.successMultiple", { count, names })
+        );
+        emit("success", added[0].uid);
+        handleClose();
+    } else {
+        throw new Error(t("gacha.addAccount.noUid"));
+    }
+  } catch (err) {
+    Snackbar.error((err as Error)?.message ?? String(err));
+  } finally {
+    addAccountLoading.value = false;
+  }
 }
 
 let unlistenAutoToken: null | (() => void) = null;
@@ -166,7 +116,6 @@ onMounted(async () => {
 
   unlistenAutoToken = await listen<string>("hg:auto-token", (event) => {
     addAccountInput.value = event.payload;
-    addAccountStep.value = "token";
     if (!props.show) {
       emit("update:show", true);
     }
@@ -183,7 +132,7 @@ onUnmounted(() => {
     :show="show"
     :title="t('gacha.addAccount.title')"
     :width="480"
-    :confirm-button-text="addAccountStep === 'token' ? t('gacha.addAccount.next') : t('gacha.addAccount.add')"
+    :confirm-button-text="t('gacha.addAccount.add')"
     :confirm-button-loading="addAccountLoading"
     :confirm-button-disabled="addAccountConfirmDisabled"
     :cancel-button-disabled="addAccountLoading"
@@ -193,33 +142,36 @@ onUnmounted(() => {
     style="--dialog-border-radius: 8px"
   >
     <var-space direction="column" :size="12">
+      <var-button-group type="primary" size="large" :elevation="0" class="server-switcher">
+        <var-button
+          :type="provider === 'hypergryph' ? 'primary' : 'default'"
+          :class="{ 'is-active': provider === 'hypergryph' }"
+          @click="provider = 'hypergryph'"
+        >
+          {{ t("gacha.addAccount.providers.hypergryph") }}
+        </var-button>
+        <var-button
+          :type="provider === 'gryphline' ? 'primary' : 'default'"
+          :class="{ 'is-active': provider === 'gryphline' }"
+          @click="provider = 'gryphline'"
+        >
+          {{ t("gacha.addAccount.providers.gryphline") }}
+        </var-button>
+      </var-button-group>
+
       <div class="add-help">
-        {{ t('gacha.addAccount.help') }}
+        {{ providerHelpText }}
       </div>
 
-      <var-space v-if="addAccountStep === 'token'" align="center" :wrap="false" :size="10">
-        <var-button type="primary" :loading="addAccountWebviewLoading" @click="startWebviewTokenFlow" style="--button-border-radius: 4px">
-          {{ t('gacha.addAccount.loginBtn') }}
-        </var-button>
-      </var-space>
+      <var-button type="primary" :loading="addAccountWebviewLoading" @click="startWebviewTokenFlow" block style="--button-border-radius: 4px; margin-top: 4px;">
+        {{ providerLoginBtnText }}
+      </var-button>
 
-      <template v-if="addAccountStep === 'token'">
-        <var-input
-          v-model="addAccountInput"
-          variant="outlined"
-          :placeholder="t('gacha.addAccount.tokenPlaceholder')"
-          size="small"
-        />
-      </template>
-
-      <var-select
-        v-else
-        v-model="addAccountSelectedUid"
+      <var-input
+        v-model="addAccountInput"
         variant="outlined"
+        :placeholder="t('gacha.addAccount.tokenPlaceholder')"
         size="small"
-        :placeholder="t('gacha.addAccount.selectUid')"
-        :options="addAccountUidOptions"
-        style="--select-border-radius: 4px"
       />
     </var-space>
   </var-dialog>
@@ -230,7 +182,22 @@ onUnmounted(() => {
   font-size: 12px;
   line-height: 1.5;
   color: var(--color-on-surface-variant);
-  margin-bottom: 4px;
+  margin-top: 4px;
+}
+
+.server-switcher {
+  --button-border-radius: 20px;
+  display: flex;
+}
+
+.server-switcher :deep(.var-button) {
+  flex: 1;
+}
+
+.server-switcher :deep(.is-active) {
+  background-color: var(--color-primary-container) !important;
+  color: var(--color-on-primary-container) !important;
+  border-color: var(--color-primary) !important;
 }
 
 :deep(.var-dialog__confirm-button),

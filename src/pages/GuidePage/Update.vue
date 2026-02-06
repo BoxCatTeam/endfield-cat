@@ -7,10 +7,11 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { updateMetadata as updateMetadataCommand } from '../../api/tauriCommands'
 import { useAppStore } from '../../stores/app'
 
-type DownloadProgress = {
+type MetadataUpdateProgress = {
+  phase: 'verifying' | 'downloading' | 'cleaning';
   current: number;
   total: number;
-  filename: string;
+  path: string;
 }
 
 const appStore = useAppStore()
@@ -23,6 +24,12 @@ const progress = ref(0)
 const progressText = ref('')
 const totalFiles = ref(0)
 let unlisten: UnlistenFn | null = null
+
+const filenameOf = (path: string) => {
+  const cleaned = path.replace(/\\/g, '/')
+  const parts = cleaned.split('/')
+  return parts[parts.length - 1] || path
+}
 
 const previousVersion = computed(() => appStore.acknowledgedAppVersion || t('common.unknown'))
 const currentVersion = computed(() => appStore.currentAppVersion || t('common.unknown'))
@@ -54,23 +61,25 @@ const startUpdate = async () => {
 
   try {
     totalFiles.value = 0
-    unlisten = await listen<DownloadProgress>('metadata-progress', (event) => {
+    unlisten = await listen<MetadataUpdateProgress>('metadata-update-progress', (event) => {
       const p = event.payload
       if (p.total > 0) {
         totalFiles.value = p.total
         progress.value = Math.floor((p.current / p.total) * 100)
-        progressText.value = t('guide.downloading', {
-          filename: p.filename,
-          current: p.current,
-          total: p.total
-        })
+        if (p.phase === 'downloading') {
+          progressText.value = t('guide.downloading', {
+            filename: filenameOf(p.path),
+            current: p.current,
+            total: p.total
+          })
+        } else {
+          const phaseKey = `settings.metadata.phases.${p.phase}`
+          progressText.value = `${t(phaseKey)}: ${filenameOf(p.path)} (${p.current}/${p.total})`
+        }
       }
     })
 
-    await updateMetadataCommand({
-      baseUrl: appStore.metadataBaseUrl,
-      version: appStore.metadataVersion
-    })
+    await updateMetadataCommand(appStore.metadataBaseUrl)
 
     await appStore.checkMetadata()
     await appStore.completePostUpdateGuide()

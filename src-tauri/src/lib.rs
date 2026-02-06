@@ -45,8 +45,11 @@ pub fn run() {
             app_cmd::check_metadata,
             app_cmd::fetch_latest_release,
             app_cmd::download_and_apply_update,
+            app_cmd::test_github_mirror,
             hg_api::auth::hg_exchange_user_token,
             hg_api::auth::hg_u8_token_by_uid,
+            hg_api::log::hg_gacha_auth_from_log,
+            hg_api::log::hg_query_role_list,
             hg_api::gacha::hg_fetch_char_records,
             hg_api::gacha::hg_fetch_weapon_pools,
             hg_api::gacha::hg_fetch_weapon_records,
@@ -59,9 +62,11 @@ pub fn run() {
             database::db_list_accounts,
             database::db_upsert_account,
             database::db_delete_account,
-            database::db_get_account_tokens
+            database::db_get_account_tokens,
+            hg_api::sync::sync_gacha_by_token,
+            hg_api::sync::sync_gacha_from_log,
+            hg_api::sync::add_account_by_token
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-
