@@ -1,0 +1,118 @@
+name: Preview Prerelease
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - preview
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: preview-prerelease
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'preview' && github.event.pull_request.head.ref == 'dev')
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.vars.outputs.tag_name }}
+      app_version: ${{ steps.vars.outputs.app_version }}
+
+    steps:
+      - name: Checkout (preview)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: preview
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version, commit and tag
+        id: vars
+        shell: pwsh
+        run: |
+          $pkg = Get-Content -Raw package.json | ConvertFrom-Json
+          $baseVersion = [string]$pkg.version
+          if ($baseVersion.Contains("-")) { $baseVersion = $baseVersion.Split("-", 2)[0] }
+
+          $shortSha = (git rev-parse --short=7 HEAD).Trim()
+          $epoch = [int64](Get-Date -AsUTC -UFormat %s)
+          $hex = ("{0:x}" -f $epoch)
+          $preVersion = "$baseVersion-pre.$hex.$shortSha"
+          $tag = "v$preVersion"
+
+          if ((git ls-remote --tags origin "refs/tags/$tag")) {
+            throw "Tag already exists on origin: $tag"
+          }
+
+          ./scripts/set-version.ps1 -Version $preVersion
+          git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
+          git commit -m "chore(version): 更新版本号为 $preVersion"
+          git tag $tag
+
+          git push origin preview
+          git push origin $tag
+
+          "tag_name=$tag" >> $env:GITHUB_OUTPUT
+          "app_version=$preVersion" >> $env:GITHUB_OUTPUT
+
+  build:
+    needs: prepare
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows-latest, ubuntu-22.04]
+
+    steps:
+      - name: Checkout (tag)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.tag_name }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: yarn
+          cache-dependency-path: yarn.lock
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri -> src-tauri/target
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - name: Install frontend dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Quick web build
+        run: yarn build
+
+      - name: Build Tauri app and publish prerelease assets
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: .
+          releaseDraft: false
+          prerelease: true
+          tagName: ${{ needs.prepare.outputs.tag_name }}
+          releaseName: EndCat ${{ needs.prepare.outputs.tag_name }}

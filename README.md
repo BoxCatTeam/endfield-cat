@@ -86,6 +86,7 @@
 - Node.js (v18+)
 - Rust (最新稳定版)
 - VS Code (推荐)
+- Yarn v1（推荐）
 
 ### 启动项目
 
@@ -97,18 +98,26 @@
 
 2. **安装依赖**
    ```bash
-   npm install
+   yarn
    ```
 
 3. **启动开发模式**
    ```bash
-   npm run tauri dev
+   yarn tauri dev
    ```
 
 4. **构建生产版本**
    ```bash
-   npm run tauri build
+   yarn tauri build
    ```
+
+## 🧩 分支与发布流程
+
+- `dev`：push 触发 CI（`.github/workflows/dev.yml`），不发版
+- `preview`：合并 `dev -> preview` 的 PR 后自动创建 Prerelease（版本号：`{version}-pre.{hex_timestamp}.{short_sha}`）
+- `master`：合并 `preview -> master` 的 PR 后自动创建 Draft Release（正式版本号）
+
+> 版本号会同步写入 `package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`（脚本：`scripts/set-version.ps1`）。
 
 ## 贡献者
 
