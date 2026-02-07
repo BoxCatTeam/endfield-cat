@@ -85,20 +85,17 @@ pub async fn reset_metadata(
 #[tauri::command]
 pub async fn update_metadata(
     window: tauri::Window,
-    app: AppHandle,
+    _app: AppHandle,
     client: State<'_, reqwest::Client>,
     base_url: Option<String>,
 ) -> Result<metadata::MetadataStatus, String> {
     let exe_dir = exe_dir()?;
-    
-    // Use app version for metadata URL
-    let app_version = app.package_info().version.to_string();
 
     metadata::update_metadata(
         &exe_dir,
         &client,
         base_url,
-        Some(app_version),
+        None,
         |progress| {
             let _ = window.emit("metadata-update-progress", progress);
         },

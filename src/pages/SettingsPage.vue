@@ -95,7 +95,7 @@ const testSourceConnection = async (source: MetadataSourceType) => {
   connectivity.value[source] = { status: 'testing', latency: 0, error: '' }
   const start = performance.now()
   try {
-    const version = appStore.currentAppVersion || metadataVersion.value
+    const version = metadataVersion.value.trim() || 'latest'
     await fetchMetadataManifest({
       baseUrl,
       version
@@ -304,7 +304,7 @@ const verifyMetadataFiles = async () => {
 const resetMetadata = async () => {
   resetMetadataLoading.value = true
   try {
-    const version = appStore.currentAppVersion || metadataVersion.value
+    const version = metadataVersion.value.trim() || 'latest'
     await resetMetadataCommand({
       baseUrl: metadataBaseUrl.value,
       version
