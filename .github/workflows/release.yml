@@ -128,6 +128,7 @@ jobs:
           projectPath: .
           releaseDraft: true
           prerelease: false
+          releaseNotes: true
           tagName: ${{ needs.prepare.outputs.tag_name }}
           releaseName: EndCat ${{ needs.prepare.outputs.tag_name }}
           target: ${{ matrix.target }}
