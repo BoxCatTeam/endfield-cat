@@ -117,6 +117,7 @@ jobs:
           projectPath: .
           releaseDraft: false
           prerelease: true
+          releaseNotes: true
           tagName: ${{ needs.prepare.outputs.tag_name }}
           releaseName: EndCat ${{ needs.prepare.outputs.tag_name }}
 

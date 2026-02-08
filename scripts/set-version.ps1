@@ -85,10 +85,12 @@ function Set-CargoPackageVersionInPlace {
       $inPackage = $false
     }
 
-    if ($inPackage -and (-not $changed) -and $line -match '^\s*version\s*=\s*".*"\s*$') {
-      $indent = ($line -replace '^(\s*).+$', '$1')
-      $lines[$i] = ($indent + 'version = "' + $NewVersion + '"')
-      $changed = $true
+    if ($inPackage -and (-not $changed) -and $line -match '^\s*version\s*=\s*".*"') {
+      $updatedLine = $line -replace '(?<=version\s*=\s*")[^"]+', $NewVersion
+      if ($updatedLine -ne $line) {
+        $lines[$i] = $updatedLine
+        $changed = $true
+      }
     }
   }
 
