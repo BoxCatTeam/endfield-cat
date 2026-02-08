@@ -1,6 +1,6 @@
 [package]
 name = "endfield-cat"
-version = "0.2.0-pre.698655d1.4bed45b"
+version = "0.2.0-pre.6988755b.087703a"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
