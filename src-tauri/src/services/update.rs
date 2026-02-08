@@ -24,7 +24,11 @@ pub fn prepare_paths(exe_name: &std::ffi::OsStr) -> Result<UpdatePaths, String> 
     let new_exe = temp_dir.join(exe_name);
     let batch_path = temp_dir.join("updater.bat");
 
-    Ok(UpdatePaths { temp_dir, new_exe, batch_path })
+    Ok(UpdatePaths {
+        temp_dir,
+        new_exe,
+        batch_path,
+    })
 }
 
 pub async fn download_new_exe<F>(
@@ -101,7 +105,7 @@ echo 启动新版本...
 start "" /min "{current_exe}"
 
 echo 清理临时文件...
-start "" /min cmd /c "timeout /t 3 /nobreak >nul & if exist \"{temp_dir}\" rd /s /q \"{temp_dir}\""
+start "" /min cmd /c "timeout /t 3 /nobreak >nul & if exist ""{temp_dir}"" rd /s /q ""{temp_dir}"""
 
 exit /b 0
 "#,
@@ -112,4 +116,25 @@ exit /b 0
     );
 
     batch_content.replace('\n', "\r\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_updater_batch_uses_cmd_double_quotes_for_cleanup() {
+        let content = build_updater_batch(
+            "endfield-cat.exe",
+            Path::new("C:\\Temp\\endfield-cat-update\\new.exe"),
+            Path::new("C:\\Program Files\\EndCat\\endfield-cat.exe"),
+            Path::new("C:\\Temp\\endfield-cat-update"),
+        );
+
+        // In cmd.exe, `\"` is not an escape; it can break parsing and lead to paths like `\\`.
+        assert!(!content.contains("\\\""));
+        assert!(content.contains(
+            r#"if exist ""C:\Temp\endfield-cat-update"" rd /s /q ""C:\Temp\endfield-cat-update""""#
+        ));
+    }
 }
