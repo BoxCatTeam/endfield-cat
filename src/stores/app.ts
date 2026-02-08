@@ -91,8 +91,8 @@ export const useAppStore = defineStore('app', () => {
     if (sourceType === 'custom') {
       return normalizeBaseUrl(customBase ?? metadataCustomBase.value)
     }
-    // 优先使用 app version，latest 作为兜底
-    const version = currentAppVersion.value || metadataVersion.value.trim() || DEFAULT_METADATA_VERSION
+    // 默认使用 latest，可通过 metadataVersion 覆盖
+    const version = metadataVersion.value.trim() || DEFAULT_METADATA_VERSION
     if (sourceType === 'mirror') {
       return METADATA_MIRROR_TEMPLATE.replace('{version}', version)
     }
@@ -236,7 +236,7 @@ export const useAppStore = defineStore('app', () => {
 
       if (metadataBaseUrl.value.trim()) {
         try {
-          const version = currentAppVersion.value || metadataVersion.value
+          const version = metadataVersion.value.trim() || DEFAULT_METADATA_VERSION
           const remote = await fetchMetadataManifest<RemoteManifest>({ baseUrl: metadataBaseUrl.value, version })
           merged = { ...status, remote }
         } catch (error) {
@@ -325,5 +325,4 @@ export const useAppStore = defineStore('app', () => {
     dismissMetadataUpdateDialog
   }
 })
-
 

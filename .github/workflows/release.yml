@@ -1,0 +1,164 @@
+name: Release Draft
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: master-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'master' && github.event.pull_request.head.ref == 'preview')
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.vars.outputs.tag_name }}
+      app_version: ${{ steps.vars.outputs.app_version }}
+
+    steps:
+      - name: Checkout (master)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version, commit and tag
+        id: vars
+        shell: pwsh
+        run: |
+          $pkg = Get-Content -Raw package.json | ConvertFrom-Json
+          $current = [string]$pkg.version
+          $releaseVersion = $current
+          if ($releaseVersion.Contains("-")) { $releaseVersion = $releaseVersion.Split("-", 2)[0] }
+
+          $tag = "v$releaseVersion"
+          if ((git ls-remote --tags origin "refs/tags/$tag")) {
+            throw "Tag already exists on origin: $tag"
+          }
+
+          ./scripts/set-version.ps1 -Version $releaseVersion
+          git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
+          git commit -m "chore(version): 更新版本号为 $releaseVersion"
+          git tag $tag
+
+          git push origin master
+          git push origin $tag
+
+          "tag_name=$tag" >> $env:GITHUB_OUTPUT
+          "app_version=$releaseVersion" >> $env:GITHUB_OUTPUT
+
+  build:
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-22.04-arm64
+            target: aarch64-unknown-linux-gnu
+
+    steps:
+      - name: Checkout (tag)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.tag_name }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: yarn
+          cache-dependency-path: yarn.lock
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri -> src-tauri/target
+
+      - name: Install Linux dependencies
+        if: startsWith(matrix.os, 'ubuntu-22.04')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf rpm
+
+      - name: Install frontend dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Quick web build
+        run: yarn build
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Build Tauri app and create draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: .
+          releaseDraft: true
+          prerelease: false
+          releaseNotes: true
+          tagName: ${{ needs.prepare.outputs.tag_name }}
+          releaseName: EndCat ${{ needs.prepare.outputs.tag_name }}
+          target: ${{ matrix.target }}
+
+      - name: Create portable exe (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $version = "${{ needs.prepare.outputs.app_version }}"
+          $candidates = @(
+            "src-tauri/target/${{ matrix.target }}/release/endfield-cat.exe",
+            "src-tauri/target/release/endfield-cat.exe"
+          )
+          $exe = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $exe) { throw "Missing binary for target ${{ matrix.target }}" }
+
+          $outDir = "src-tauri/target/release/bundle/portable"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          $suffix = if ("${{ matrix.target }}" -like "aarch64*") { "arm64" } else { "x64" }
+          $portableExe = Join-Path $outDir ("endfield-cat_{0}_{1}_portable.exe" -f $version, $suffix)
+          Copy-Item -LiteralPath $exe -Destination $portableExe -Force
+
+          "PORTABLE_EXE=$portableExe" >> $env:GITHUB_ENV
+
+      - name: Upload portable exe to release (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ needs.prepare.outputs.tag_name }}"
+          if (-not $env:PORTABLE_EXE) { throw "PORTABLE_EXE env is not set" }
+          gh release upload $tag "$env:PORTABLE_EXE" --clobber --repo "$env:GITHUB_REPOSITORY"

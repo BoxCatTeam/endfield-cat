@@ -42,4 +42,7 @@ endfield-cat-metadata
 
 # Local TLS certs (self-signed)
 /certs/*
-scripts
+
+findings.md
+progress.md
+task_plan.md
