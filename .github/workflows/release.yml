@@ -61,11 +61,23 @@ jobs:
 
   build:
     needs: prepare
-    runs-on: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        platform: [windows-latest, macos-latest, ubuntu-22.04]
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-22.04-arm64
+            target: aarch64-unknown-linux-gnu
 
     steps:
       - name: Checkout (tag)
@@ -84,6 +96,9 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.target }}
+
       - name: Cache Rust
         uses: swatinem/rust-cache@v2
         with:
@@ -91,7 +106,7 @@ jobs:
             src-tauri -> src-tauri/target
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: startsWith(matrix.os, 'ubuntu-22.04')
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf rpm
@@ -115,26 +130,30 @@ jobs:
           prerelease: false
           tagName: ${{ needs.prepare.outputs.tag_name }}
           releaseName: EndCat ${{ needs.prepare.outputs.tag_name }}
+          target: ${{ matrix.target }}
 
       - name: Create portable exe (Windows)
-        if: matrix.platform == 'windows-latest'
+        if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           $version = "${{ needs.prepare.outputs.app_version }}"
-          $exe = "src-tauri/target/release/endfield-cat.exe"
-          if (-not (Test-Path -LiteralPath $exe)) {
-            throw "Missing binary: $exe"
-          }
+          $candidates = @(
+            "src-tauri/target/${{ matrix.target }}/release/endfield-cat.exe",
+            "src-tauri/target/release/endfield-cat.exe"
+          )
+          $exe = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $exe) { throw "Missing binary for target ${{ matrix.target }}" }
 
           $outDir = "src-tauri/target/release/bundle/portable"
           New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-          $portableExe = Join-Path $outDir ("endfield-cat_{0}_x64_portable.exe" -f $version)
+          $suffix = if ("${{ matrix.target }}" -like "aarch64*") { "arm64" } else { "x64" }
+          $portableExe = Join-Path $outDir ("endfield-cat_{0}_{1}_portable.exe" -f $version, $suffix)
           Copy-Item -LiteralPath $exe -Destination $portableExe -Force
 
           "PORTABLE_EXE=$portableExe" >> $env:GITHUB_ENV
 
       - name: Upload portable exe to release (Windows)
-        if: matrix.platform == 'windows-latest'
+        if: matrix.os == 'windows-latest'
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
