@@ -105,7 +105,7 @@ echo 启动新版本...
 start "" /min "{current_exe}"
 
 echo 清理临时文件...
-start "" /min cmd /c "timeout /t 3 /nobreak >nul & if exist ""{temp_dir}"" rd /s /q ""{temp_dir}"""
+start "" /min powershell -NoProfile -ExecutionPolicy Bypass -Command "param([string]$p) Start-Sleep -Seconds 3; if (Test-Path -LiteralPath $p) {{ Remove-Item -LiteralPath $p -Recurse -Force }}" "{temp_dir}"
 
 exit /b 0
 "#,
@@ -123,7 +123,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn build_updater_batch_uses_cmd_double_quotes_for_cleanup() {
+    fn build_updater_batch_uses_powershell_literalpath_cleanup() {
         let content = build_updater_batch(
             "endfield-cat.exe",
             Path::new("C:\\Temp\\endfield-cat-update\\new.exe"),
@@ -133,8 +133,19 @@ mod tests {
 
         // In cmd.exe, `\"` is not an escape; it can break parsing and lead to paths like `\\`.
         assert!(!content.contains("\\\""));
-        assert!(content.contains(
-            r#"if exist ""C:\Temp\endfield-cat-update"" rd /s /q ""C:\Temp\endfield-cat-update""""#
-        ));
+        assert!(content.contains(r#"powershell -NoProfile -ExecutionPolicy Bypass -Command "param([string]$p) Start-Sleep -Seconds 3; if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force }""#));
+        assert!(content.contains(r#""C:\Temp\endfield-cat-update""#));
+    }
+
+    #[test]
+    fn build_updater_batch_cleanup_quotes_ampersand_path() {
+        let content = build_updater_batch(
+            "endfield-cat.exe",
+            Path::new("C:\\Temp\\endfield-cat-update\\new.exe"),
+            Path::new("C:\\Program Files\\EndCat\\endfield-cat.exe"),
+            Path::new("C:\\Temp\\A&B\\endfield-cat-update"),
+        );
+
+        assert!(content.contains(r#""C:\Temp\A&B\endfield-cat-update""#));
     }
 }
