@@ -44,6 +44,7 @@ export const useAppStore = defineStore('app', () => {
   const theme = ref<'system' | 'light' | 'dark'>('system')
   const background = ref('default')
   const language = ref('zh-CN')
+  const dataDir = ref('')
 
   const metadataSourceType = ref<MetadataSourceType>('cdn')
   const metadataVersion = ref(DEFAULT_METADATA_VERSION)
@@ -113,6 +114,7 @@ export const useAppStore = defineStore('app', () => {
       if (config?.theme) theme.value = config.theme
       if (config?.background) background.value = config.background
       if (config?.language) language.value = config.language
+      if (typeof config?.dataDir === 'string') dataDir.value = config.dataDir
       if (config?.firstRun !== undefined) firstRun.value = config.firstRun
       if (config?.appVersion) acknowledgedAppVersion.value = config.appVersion
       if (config?.pendingPostUpdateVersion) pendingPostUpdateVersion.value = config.pendingPostUpdateVersion
@@ -148,6 +150,7 @@ export const useAppStore = defineStore('app', () => {
         theme: theme.value,
         background: background.value,
         language: language.value,
+        dataDir: dataDir.value.trim() || null,
         firstRun: firstRun.value,
         // appVersion 仅用于“已完成引导/已确认”的版本记录，不作为当前版本来源
         // 当前版本永远从 Tauri 的 get_app_version 获取。
@@ -171,7 +174,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // 监听变更自动保存
-  watch([theme, background, language, metadataCustomBase, firstRun, acknowledgedAppVersion, pendingPostUpdateVersion, needsPostUpdateGuide, githubMirrorEnabled, githubMirrorSource, githubMirrorCustomTemplate], () => {
+  watch([theme, background, language, dataDir, metadataCustomBase, firstRun, acknowledgedAppVersion, pendingPostUpdateVersion, needsPostUpdateGuide, githubMirrorEnabled, githubMirrorSource, githubMirrorCustomTemplate], () => {
     void saveConfig()
   })
 
@@ -295,6 +298,7 @@ export const useAppStore = defineStore('app', () => {
     theme,
     background,
     language,
+    dataDir,
     firstRun,
     metadataSourceType,
     metadataVersion,
@@ -306,6 +310,7 @@ export const useAppStore = defineStore('app', () => {
     isMetadataOutdated,
     checkMetadata,
     loadConfig,
+    saveConfig,
     syncAppVersion,
     completeSetup,
     completePostUpdateGuide,
@@ -325,4 +330,3 @@ export const useAppStore = defineStore('app', () => {
     dismissMetadataUpdateDialog
   }
 })
-

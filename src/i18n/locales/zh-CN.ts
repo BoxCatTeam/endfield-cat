@@ -87,6 +87,20 @@ export default {
         userData: "用户数据",
         openUserData: "打开数据目录",
         userDataDesc: "用户数据、元数据、缓存文件 均在此目录",
+        dataDir: {
+            title: "数据目录设置",
+            desc: "自定义数据目录（默认：Documents/endcat），修改后需重启生效",
+            dialogTitle: "数据目录",
+            hint: "留空表示使用默认目录：Documents/endcat。修改后需要重启应用才会切换到新目录。",
+            placeholder: "例如：D:\\\\EndCatData（留空为默认）",
+            pick: "选择目录",
+            pickTitle: "选择数据目录",
+            reset: "重置为默认",
+            resetOk: "已重置为默认数据目录（重启后生效）",
+            restartHint: "数据目录已保存，重启应用后生效",
+            confirm: "保存",
+            cancel: "取消"
+        },
         update: {
             current: "当前版本",
             latest: "最新版本",
@@ -156,6 +170,7 @@ export default {
         },
         messages: {
             openLinkFailed: "无法打开链接",
+            openDirFailed: "无法打开目录",
             devPlaceholder: "开发中暂不可用"
         },
         githubMirror: {

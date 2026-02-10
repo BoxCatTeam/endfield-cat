@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+
+use tauri::AppHandle;
+
+use crate::services::config;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
@@ -50,19 +53,9 @@ impl GithubMirrorConfig {
 }
 
 /// 从配置文件读取 GitHub 镜像配置
-pub fn read_mirror_config(exe_dir: &Path) -> GithubMirrorConfig {
-    let config_path = exe_dir.join("data").join("config").join("config.json");
-    if !config_path.exists() {
-        return GithubMirrorConfig::default();
-    }
-
-    let content = match std::fs::read_to_string(&config_path) {
-        Ok(c) => c,
-        Err(_) => return GithubMirrorConfig::default(),
-    };
-
-    let json: serde_json::Value = match serde_json::from_str(&content) {
-        Ok(j) => j,
+pub fn read_mirror_config(app: &AppHandle) -> GithubMirrorConfig {
+    let json = match config::read_config(app) {
+        Ok(v) => v,
         Err(_) => return GithubMirrorConfig::default(),
     };
 

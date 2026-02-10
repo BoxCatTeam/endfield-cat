@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onUnmounted, onMounted } from 'vue'
+import { ref, computed, onUnmounted, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '../../stores/app'
 import { Snackbar } from '@varlet/ui'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { useI18n } from 'vue-i18n'
-import type { MetadataSourceType } from '../../stores/app'
-import { fetchMetadataManifest, resetMetadata as resetMetadataCommand } from '../../api/tauriCommands'
+import type { GithubMirrorSourceType, MetadataSourceType } from '../../stores/app'
+import { GITHUB_MIRROR_TEMPLATES } from '../../stores/app'
+import { fetchMetadataManifest, resetMetadata as resetMetadataCommand, testGithubMirror } from '../../api/tauriCommands'
+import SplitButtonSelect from '../../components/SplitButtonSelect.vue'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -95,6 +97,90 @@ const selectSource = async (source: MetadataSourceType) => {
   appStore.metadataSourceType = source
   await testSourceConnection(source)
 }
+
+const TAURI_OK = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in (window as any)
+
+// GitHub 镜像配置（引导页中也可设置）
+const githubMirrorEnabled = computed({
+  get: () => appStore.githubMirrorEnabled,
+  set: (val) => appStore.githubMirrorEnabled = val
+})
+
+const githubMirrorSource = computed({
+  get: () => appStore.githubMirrorSource,
+  set: (val) => appStore.githubMirrorSource = val
+})
+
+const githubMirrorCustomTemplate = computed({
+  get: () => appStore.githubMirrorCustomTemplate,
+  set: (val) => appStore.githubMirrorCustomTemplate = val
+})
+
+const githubMirrorSourceOptions = computed(() => [
+  { label: t('settings.githubMirror.sources.gh-proxy-cf'), value: 'gh-proxy-cf' as const },
+  { label: t('settings.githubMirror.sources.gh-proxy-fastly'), value: 'gh-proxy-fastly' as const },
+  { label: t('settings.githubMirror.sources.gh-proxy-edgeone'), value: 'gh-proxy-edgeone' as const },
+  { label: t('settings.githubMirror.sources.ghfast'), value: 'ghfast' as const },
+  { label: t('settings.githubMirror.sources.custom'), value: 'custom' as const },
+])
+
+const githubMirrorConnectivity = ref<{ status: 'idle' | 'testing' | 'success' | 'failed'; latency: number; error: string }>({
+  status: 'idle',
+  latency: 0,
+  error: ''
+})
+
+const getGithubMirrorTemplate = () => {
+  if (githubMirrorSource.value === 'custom') {
+    return githubMirrorCustomTemplate.value || '{url}'
+  }
+  return GITHUB_MIRROR_TEMPLATES[githubMirrorSource.value]
+}
+
+const testGithubMirrorConnection = async () => {
+  if (!TAURI_OK || !githubMirrorEnabled.value) {
+    githubMirrorConnectivity.value = { status: 'idle', latency: 0, error: '' }
+    return
+  }
+
+  const template = getGithubMirrorTemplate()
+  if (!template || template === '{url}') {
+    githubMirrorConnectivity.value = { status: 'idle', latency: 0, error: '' }
+    return
+  }
+
+  githubMirrorConnectivity.value = { status: 'testing', latency: 0, error: '' }
+  try {
+    const latency = await testGithubMirror(template)
+    githubMirrorConnectivity.value = { status: 'success', latency, error: '' }
+  } catch (e: any) {
+    console.error('GitHub mirror test failed:', e)
+    githubMirrorConnectivity.value = {
+      status: 'failed',
+      latency: 0,
+      error: typeof e === 'string' ? e : t('guide.connectionFailed')
+    }
+  }
+}
+
+const selectGithubMirrorSource = async (source: GithubMirrorSourceType) => {
+  githubMirrorSource.value = source
+  await testGithubMirrorConnection()
+}
+
+watch(githubMirrorEnabled, (enabled) => {
+  if (enabled) {
+    void testGithubMirrorConnection()
+  } else {
+    githubMirrorConnectivity.value = { status: 'idle', latency: 0, error: '' }
+  }
+})
+
+watch(githubMirrorCustomTemplate, () => {
+  if (githubMirrorSource.value === 'custom') {
+    githubMirrorConnectivity.value = { status: 'idle', latency: 0, error: '' }
+  }
+})
 
 const checkMetadataState = async () => {
   checking.value = true
@@ -249,6 +335,69 @@ onUnmounted(() => {
               />
           </div>
         </transition>
+
+        <div class="section-label" style="margin-top: 20px;">{{ t('settings.githubMirror.title') }}</div>
+        <var-paper :elevation="false" radius="12" style="padding: 14px 16px;">
+          <var-space direction="column" :size="12">
+            <var-space justify="space-between" align="center">
+              <div>
+                <div class="source-name">{{ t('settings.githubMirror.enable') }}</div>
+                <div class="alert-desc">{{ t('settings.githubMirror.enableDesc') }}</div>
+              </div>
+              <var-switch v-model="githubMirrorEnabled" />
+            </var-space>
+
+            <var-space justify="space-between" align="center">
+              <div>
+                <div class="source-name">{{ t('settings.githubMirror.source') }}</div>
+                <div class="alert-desc">{{ t('settings.githubMirror.sourceDesc') }}</div>
+              </div>
+              <SplitButtonSelect
+                v-model="githubMirrorSource"
+                :options="githubMirrorSourceOptions"
+                :disabled="!githubMirrorEnabled"
+                @update:model-value="selectGithubMirrorSource"
+              />
+            </var-space>
+
+            <div v-if="githubMirrorEnabled && githubMirrorSource === 'custom'">
+              <div class="input-label">{{ t('settings.githubMirror.customUrl') }}</div>
+              <var-input
+                v-model="githubMirrorCustomTemplate"
+                size="small"
+                variant="outlined"
+                :placeholder="t('settings.githubMirror.customPlaceholder')"
+                @change="testGithubMirrorConnection"
+              />
+            </div>
+
+            <var-space justify="space-between" align="center">
+              <div class="source-status">
+                <span v-if="githubMirrorConnectivity.status === 'testing'" class="status-badge testing">
+                  <var-loading type="cube" size="small" :radius="2" class="inline-loading" />
+                </span>
+                <span v-else-if="githubMirrorConnectivity.status === 'success'" class="status-badge success">
+                  {{ githubMirrorConnectivity.latency }}ms
+                </span>
+                <span v-else-if="githubMirrorConnectivity.status === 'failed'" class="status-badge failed">
+                  [{{ t('guide.connectionFailed') }}]
+                </span>
+                <span v-else class="status-badge">--ms</span>
+              </div>
+
+              <var-button
+                round
+                text
+                size="mini"
+                type="primary"
+                :disabled="!githubMirrorEnabled || githubMirrorConnectivity.status === 'testing'"
+                @click="testGithubMirrorConnection"
+              >
+                <var-icon name="refresh" size="16" />
+              </var-button>
+            </var-space>
+          </var-space>
+        </var-paper>
       </div>
     </div>
 
