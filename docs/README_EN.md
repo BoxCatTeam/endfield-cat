@@ -14,7 +14,7 @@
   <a href="../LICENSE">
     <img src="https://img.shields.io/badge/License-GPL_v2-blue.svg" alt="License">
   </a>
-  <img src="https://img.shields.io/badge/Version-0.1.2-green.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.2.1-green.svg" alt="Version">
   <img src="https://img.shields.io/badge/Tauri-v2-orange.svg" alt="Tauri">
   <img src="https://img.shields.io/badge/Vue-v3-42b883.svg" alt="Vue">
 </p>
@@ -35,20 +35,21 @@
 
 ## 📥 Download
 
-Please visit the [GitHub Releases](https://github.com/BoxCatTeam/endfield-cat/releases) page to download the latest installer.
+Please visit the [GitHub Releases](https://github.com/BoxCatTeam/endfield-cat/releases/latest) page to download the latest installer.
 
 ## 🖥️ Supported Platforms
 
 | Platform | Arch | Status |
 | :--- | :--- | :--- |
-| **Windows** | x64 | ✅ Supported |
-| **Linux** | x64 | 🚧 Coming Soon |
-| **macOS** | x64 | 🚧 Coming Soon |
+| **Windows** | x64 / arm64 | ✅ Supported |
+| **Linux** | x64 / arm64 | ❓ Untested (Ubuntu 22.04+) |
+| **macOS** | x64 / arm64 | ❓ Untested (macOS 13+) |
 
 ## ✨ Features
 
 - **📊 Gacha Analysis**
   - Import/Export gacha records.
+  - **Backend Sync**: Faster and more stable data synchronization.
   - Visualize statistics: Pity counter, 6-star history, average pulls, and more.
   - Interactive charts powered by ECharts.
   - Local database storage (SQLite) for privacy and speed.
@@ -56,7 +57,16 @@ Please visit the [GitHub Releases](https://github.com/BoxCatTeam/endfield-cat/re
 - **🗂️ Metadata Management**
   - Auto-fetch game data (images, text) from remote sources.
   - Support for multiple sources: GitHub (jsDelivr), Mirrors, or Custom CDN.
+  - **Version Check**: Check available updates and upgrade resources easily.
   - Smart caching and incremental updates.
+
+- **🌍 Internationalization (i18n)**
+  - Fully supports **Simplified Chinese** and **English** interfaces.
+  - Multi-language support for character and item names.
+
+- **👥 Multi-account Management**
+  - Add and manage multiple game accounts.
+  - Easily switch between different servers (Global/CN).
 
 - **🎨 Modern UI**
   - Built with **Varlet UI** (Material Design).
@@ -95,17 +105,17 @@ Please visit the [GitHub Releases](https://github.com/BoxCatTeam/endfield-cat/re
 
 2. **Install dependencies**
    ```bash
-   npm install
+   yarn
    ```
 
 3. **Run in development mode**
    ```bash
-   npm run tauri dev
+   yarn tauri dev
    ```
 
 4. **Build for production**
    ```bash
-   npm run tauri build
+   yarn tauri build
    ```
 
 ## 📄 License

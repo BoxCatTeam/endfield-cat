@@ -8,7 +8,9 @@ import { useAppStore } from '../stores/app'
 import { useUpdaterStore } from '../stores/updater'
 import type { MetadataSourceType, GithubMirrorSourceType } from '../stores/app'
 import { GITHUB_MIRROR_TEMPLATES } from '../stores/app'
-import { fetchMetadataManifest, getAppVersion, resetMetadata as resetMetadataCommand, testGithubMirror } from '../api/tauriCommands'
+import { fetchMetadataManifest, getAppVersion, getStoragePaths, openDataDir as openDataDirCommand, resetMetadata as resetMetadataCommand, testGithubMirror } from '../api/tauriCommands'
+import type { StoragePaths } from '../api/tauriCommands'
+import { pickDirectory } from '../api/systemDialog'
 import SplitButtonSelect from '../components/SplitButtonSelect.vue'
 
 const { t, tm } = useI18n()
@@ -32,6 +34,7 @@ onMounted(async () => {
   }
 
   void testAllConnections()
+  void refreshStoragePaths()
 })
 
 // 与 store 双向绑定
@@ -145,7 +148,64 @@ const openLatestRelease = async () => {
 }
 
 const openDataDir = () => {
-  Snackbar.info(t('settings.userData'))
+  void (async () => {
+    try {
+      await openDataDirCommand()
+    } catch (error) {
+      console.error('Failed to open data dir:', error)
+      Snackbar.error(t('settings.messages.openDirFailed'))
+    }
+  })()
+}
+
+const storagePaths = ref<StoragePaths | null>(null)
+const resolvedDataDir = computed(() => storagePaths.value?.dataDir || '')
+
+const refreshStoragePaths = async () => {
+  try {
+    storagePaths.value = await getStoragePaths()
+  } catch (error) {
+    console.error('Failed to get storage paths:', error)
+  }
+}
+
+const showDataDirDialog = ref(false)
+const dataDirDraft = ref('')
+
+const openDataDirDialog = async () => {
+  await refreshStoragePaths()
+  dataDirDraft.value = appStore.dataDir || ''
+  showDataDirDialog.value = true
+}
+
+const pickDataDir = async () => {
+  try {
+    const defaultPath = dataDirDraft.value.trim() || resolvedDataDir.value.trim() || undefined
+    const selected = await pickDirectory({
+      title: t('settings.dataDir.pickTitle'),
+      defaultPath,
+    })
+    if (selected) dataDirDraft.value = selected
+  } catch (error) {
+    console.error('Failed to pick directory:', error)
+    Snackbar.error(t('settings.messages.openDirFailed'))
+  }
+}
+
+const resetDataDirToDefault = async () => {
+  dataDirDraft.value = ''
+  appStore.dataDir = ''
+  await appStore.saveConfig()
+  await refreshStoragePaths()
+  Snackbar.info(t('settings.dataDir.resetOk'))
+}
+
+const confirmDataDir = async () => {
+  appStore.dataDir = dataDirDraft.value.trim()
+  await appStore.saveConfig()
+  await refreshStoragePaths()
+  showDataDirDialog.value = false
+  Snackbar.info(t('settings.dataDir.restartHint'))
 }
 
 const links: Record<string, string> = {
@@ -482,9 +542,25 @@ const notAvailable = () => {
                 <div class="cell-title">{{ t('settings.openUserData') }}</div>
               </template>
               <template #description>
+                 <div v-if="resolvedDataDir" class="cell-desc text-ellipsis">{{ resolvedDataDir }}</div>
                  <div class="cell-desc">{{ t('settings.userDataDesc') }}</div>
               </template>
                <template #extra>
+                <var-icon name="chevron-right" />
+              </template>
+            </var-cell>
+
+            <var-cell ripple @click="openDataDirDialog">
+              <template #icon>
+                <var-icon name="folder" size="24px" class="section-icon" />
+              </template>
+              <template #default>
+                <div class="cell-title">{{ t('settings.dataDir.title') }}</div>
+              </template>
+              <template #description>
+                <div class="cell-desc">{{ t('settings.dataDir.desc') }}</div>
+              </template>
+              <template #extra>
                 <var-icon name="chevron-right" />
               </template>
             </var-cell>
@@ -739,6 +815,36 @@ const notAvailable = () => {
         </section>
 
       </var-space>
+
+      <var-dialog
+        :show="showDataDirDialog"
+        :title="t('settings.dataDir.dialogTitle')"
+        :width="560"
+        :confirm-button-text="t('settings.dataDir.confirm')"
+        :cancel-button-text="t('settings.dataDir.cancel')"
+        @confirm="confirmDataDir"
+        @closed="showDataDirDialog = false"
+        @update:show="showDataDirDialog = $event"
+        style="--dialog-border-radius: 8px"
+      >
+        <var-space direction="column" :size="12">
+          <div class="cell-desc">{{ t('settings.dataDir.hint') }}</div>
+          <var-input
+            v-model="dataDirDraft"
+            variant="outlined"
+            size="small"
+            :placeholder="t('settings.dataDir.placeholder')"
+          />
+          <var-space :size="8">
+            <var-button type="primary" size="small" :elevation="false" @click="pickDataDir">
+              {{ t('settings.dataDir.pick') }}
+            </var-button>
+            <var-button type="default" size="small" :elevation="false" @click="resetDataDirToDefault">
+              {{ t('settings.dataDir.reset') }}
+            </var-button>
+          </var-space>
+        </var-space>
+      </var-dialog>
     </div>
   </div>
 </template>

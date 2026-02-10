@@ -1,7 +1,7 @@
 {
-  "name": "endfield-cat",
+  "name": "endcat",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
   "engines": {
     "node": ">=24 <25"
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-sql": "^2",
     "@varlet/ui": "^3.13.1",

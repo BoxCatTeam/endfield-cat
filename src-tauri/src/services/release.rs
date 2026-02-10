@@ -21,7 +21,7 @@ pub async fn fetch_latest_release(client: &reqwest::Client) -> Result<LatestRele
         let resp = client
             .get(url)
             .header("Accept", "application/vnd.github+json")
-            .header("User-Agent", "endfield-cat/tauri")
+            .header("User-Agent", "endcat/tauri")
             .send()
             .await
             .map_err(|e| FetchReleaseError { message: e.to_string(), status: None })?;
@@ -75,7 +75,7 @@ pub async fn fetch_latest_release(client: &reqwest::Client) -> Result<LatestRele
             let fallback_url = "https://cdn.jsdelivr.net/gh/BoxCatTeam/endfield-cat@master/package.json";
             let resp = client
                 .get(fallback_url)
-                .header("User-Agent", "endfield-cat/tauri")
+                .header("User-Agent", "endcat/tauri")
                 .send()
                 .await
                 .map_err(|e| e.to_string())?;
@@ -108,7 +108,7 @@ pub async fn fetch_latest_prerelease(client: &reqwest::Client) -> Result<LatestR
     let resp = client
         .get(url)
         .header("Accept", "application/vnd.github+json")
-        .header("User-Agent", "endfield-cat/tauri")
+        .header("User-Agent", "endcat/tauri")
         .send()
         .await
         .map_err(|e| e.to_string())?;

@@ -12,7 +12,7 @@
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/License-GPL_v2-blue.svg" alt="License">
   </a>
-  <img src="https://img.shields.io/badge/Version-0.1.2-green.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.2.1-green.svg" alt="Version">
   <img src="https://img.shields.io/badge/Tauri-v2-orange.svg" alt="Tauri">
   <img src="https://img.shields.io/badge/Vue-v3-42b883.svg" alt="Vue">
 </p>
@@ -37,20 +37,21 @@
 
 ## 📥 下载
 
-请前往 [GitHub Releases](https://github.com/BoxCatTeam/endfield-cat/releases) 页面下载最新版本安装包。
+请前往 [GitHub Releases](https://github.com/BoxCatTeam/endfield-cat/releases/latest) 页面下载最新版本安装包。
 
 ## 🖥️ 支持平台
 
 | 平台 | 架构 | 状态 |
 | :--- | :--- | :--- |
-| **Windows** | x64 | ✅ 支持 |
-| **Linux** | x64 | 🚧 计划中 |
-| **macOS** | x64 | 🚧 计划中 |
+| **Windows** | x64 / arm64 | ✅ 支持 |
+| **Linux** | x64 / arm64 | ❓ 未经测试 (Ubuntu 22.04+) |
+| **macOS** | x64 / arm64 | ❓ 未经测试 (macOS 13+) |
 
 ## ✨ 功能特性
 
 - **📊 唤醒记录分析 (Gacha Analysis)**
   - 支持导入/导出唤醒记录。
+  - **后端同步**：更稳定快速的数据同步体验。
   - 可视化统计：保底计数、六星历史记录、平均抽数等。
   - 基于 ECharts 的交互式图表。
   - 本地数据库存储 (SQLite)，保障隐私与速度。
@@ -58,7 +59,16 @@
 - **🗂️ 元数据管理**
   - 自动从远程源获取游戏数据（图片、文本）。
   - 支持多种源：GitHub (jsDelivr)、镜像源 (Mirror) 或自定义 CDN。
+  - **版本检查**：直观查看并更新资源版本。
   - 智能缓存与增量更新。
+
+- **🌍 国际化支持 (i18n)**
+  - 完整支持 **简体中文** 与 **English** 界面切换。
+  - 角色、物品名称等多语言对照。
+
+- **👥 多账号管理**
+  - 支持添加与管理多个游戏账号。
+  - 便捷切换不同服务器（国际服/国服）账号。
 
 - **🎨 现代化 UI**
   - 基于 **Varlet UI** (Material Design) 构建。

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "endfield-cat",
-  "version": "0.2.1",
-  "identifier": "org.boxcat.endfield-cat",
+  "productName": "endcat",
+  "version": "0.3.0",
+  "identifier": "org.boxcat.endcat",
   "build": {
     "beforeDevCommand": "yarn dev",
     "devUrl": "http://localhost:14200",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "endfield-cat",
+        "title": "endcat",
         "width": 1175,
         "height": 875,
         "minWidth": 675,

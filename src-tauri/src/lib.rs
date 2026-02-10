@@ -15,6 +15,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_sql::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let handle = app.handle().clone();
@@ -25,7 +26,7 @@ pub fn run() {
             
             // Create shared HTTP client to avoid blocking main thread
             let http_client = reqwest::Client::builder()
-                .user_agent("endfield-cat")
+                .user_agent("endcat")
                 .build()
                 .expect("Failed to build HTTP client");
             app.manage(http_client);
@@ -37,6 +38,7 @@ pub fn run() {
             app_cmd::quit,
             app_cmd::get_app_version,
             app_cmd::get_storage_paths,
+            app_cmd::open_data_dir,
             app_cmd::read_config,
             app_cmd::save_config,
             app_cmd::reset_metadata,

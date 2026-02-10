@@ -15,7 +15,7 @@ pub struct UpdatePaths {
 }
 
 pub fn prepare_paths(exe_name: &std::ffi::OsStr) -> Result<UpdatePaths, String> {
-    let temp_dir = std::env::temp_dir().join("endfield-cat-update");
+    let temp_dir = std::env::temp_dir().join("endcat-update");
     if temp_dir.exists() {
         fs::remove_dir_all(&temp_dir).map_err(|e| e.to_string())?;
     }
@@ -83,8 +83,8 @@ pub fn build_updater_batch(
         r#"@echo off
 chcp 65001 >nul
 setlocal enabledelayedexpansion
-echo 正在更新 endfield-cat...
-echo Updating endfield-cat...
+echo 正在更新 endcat...
+echo Updating endcat...
 
 :wait_loop
 tasklist /FI "IMAGENAME eq {exe_name}" 2>NUL | find /I "{exe_name}" >NUL
@@ -125,27 +125,27 @@ mod tests {
     #[test]
     fn build_updater_batch_uses_powershell_literalpath_cleanup() {
         let content = build_updater_batch(
-            "endfield-cat.exe",
-            Path::new("C:\\Temp\\endfield-cat-update\\new.exe"),
-            Path::new("C:\\Program Files\\EndCat\\endfield-cat.exe"),
-            Path::new("C:\\Temp\\endfield-cat-update"),
+            "endcat.exe",
+            Path::new("C:\\Temp\\endcat-update\\new.exe"),
+            Path::new("C:\\Program Files\\EndCat\\endcat.exe"),
+            Path::new("C:\\Temp\\endcat-update"),
         );
 
         // In cmd.exe, `\"` is not an escape; it can break parsing and lead to paths like `\\`.
         assert!(!content.contains("\\\""));
         assert!(content.contains(r#"powershell -NoProfile -ExecutionPolicy Bypass -Command "param([string]$p) Start-Sleep -Seconds 3; if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force }""#));
-        assert!(content.contains(r#""C:\Temp\endfield-cat-update""#));
+        assert!(content.contains(r#""C:\Temp\endcat-update""#));
     }
 
     #[test]
     fn build_updater_batch_cleanup_quotes_ampersand_path() {
         let content = build_updater_batch(
-            "endfield-cat.exe",
-            Path::new("C:\\Temp\\endfield-cat-update\\new.exe"),
-            Path::new("C:\\Program Files\\EndCat\\endfield-cat.exe"),
-            Path::new("C:\\Temp\\A&B\\endfield-cat-update"),
+            "endcat.exe",
+            Path::new("C:\\Temp\\endcat-update\\new.exe"),
+            Path::new("C:\\Program Files\\EndCat\\endcat.exe"),
+            Path::new("C:\\Temp\\A&B\\endcat-update"),
         );
 
-        assert!(content.contains(r#""C:\Temp\A&B\endfield-cat-update""#));
+        assert!(content.contains(r#""C:\Temp\A&B\endcat-update""#));
     }
 }
