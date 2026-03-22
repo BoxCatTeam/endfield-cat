@@ -46,6 +46,8 @@
     "core:window:allow-primary-monitor",
     "sql:default",
     "sql:allow-execute",
-    "opener:default"
+    "opener:default",
+    "opener:allow-open-path",
+    "dialog:default"
   ]
 }

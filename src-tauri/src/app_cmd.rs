@@ -1,6 +1,33 @@
 use crate::services::{config, metadata, mirror, release, update};
 use tauri::{AppHandle, Emitter, State};
 
+#[cfg(target_os = "windows")]
+fn open_dir_in_os(path: &std::path::Path) -> Result<(), String> {
+    std::process::Command::new("explorer")
+        .arg(path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn open_dir_in_os(path: &std::path::Path) -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg(path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+fn open_dir_in_os(path: &std::path::Path) -> Result<(), String> {
+    std::process::Command::new("xdg-open")
+        .arg(path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn get_app_version(app: AppHandle) -> Result<String, String> {
     let version = app
@@ -21,34 +48,31 @@ pub fn quit(app_handle: AppHandle) {
     app_handle.exit(0);
 }
 
-fn exe_dir() -> Result<std::path::PathBuf, String> {
-    let mut exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
-    exe_path.pop();
-    Ok(exe_path)
+#[tauri::command]
+pub fn get_storage_paths(app: AppHandle) -> Result<config::StoragePaths, String> {
+    config::ensure_paths(&app)
 }
 
 #[tauri::command]
-pub fn get_storage_paths() -> Result<config::StoragePaths, String> {
-    let exe_dir = exe_dir()?;
-    config::ensure_paths(&exe_dir)
+pub fn open_data_dir(app: AppHandle) -> Result<(), String> {
+    let resolved = config::ensure_resolved_paths(&app)?;
+    open_dir_in_os(&resolved.data_dir)
 }
 
 #[tauri::command]
-pub fn read_config() -> Result<serde_json::Value, String> {
-    let exe_dir = exe_dir()?;
-    config::read_config(&exe_dir)
+pub fn read_config(app: AppHandle) -> Result<serde_json::Value, String> {
+    config::read_config(&app)
 }
 
 #[tauri::command]
-pub fn save_config(config: serde_json::Value) -> Result<(), String> {
-    let exe_dir = exe_dir()?;
-    config::save_config(&exe_dir, config)
+pub fn save_config(app: AppHandle, config: serde_json::Value) -> Result<(), String> {
+    config::save_config(&app, config)
 }
 
 #[tauri::command]
-pub fn check_metadata() -> Result<metadata::MetadataStatus, String> {
-    let exe_dir = exe_dir()?;
-    metadata::check_metadata_status(&exe_dir)
+pub fn check_metadata(app: AppHandle) -> Result<metadata::MetadataStatus, String> {
+    let resolved = config::ensure_resolved_paths(&app)?;
+    metadata::check_metadata_status(&resolved.data_dir)
 }
 
 #[tauri::command]
@@ -64,14 +88,15 @@ pub async fn fetch_metadata_manifest(
 #[tauri::command]
 pub async fn reset_metadata(
     window: tauri::Window,
+    app: AppHandle,
     client: State<'_, reqwest::Client>,
     base_url: Option<String>,
     version: Option<String>,
 ) -> Result<metadata::MetadataStatus, String> {
-    let exe_dir = exe_dir()?;
+    let resolved = config::ensure_resolved_paths(&app)?;
 
     metadata::reset_metadata(
-        &exe_dir,
+        &resolved.data_dir,
         &client,
         base_url,
         version,
@@ -85,14 +110,14 @@ pub async fn reset_metadata(
 #[tauri::command]
 pub async fn update_metadata(
     window: tauri::Window,
-    _app: AppHandle,
+    app: AppHandle,
     client: State<'_, reqwest::Client>,
     base_url: Option<String>,
 ) -> Result<metadata::MetadataStatus, String> {
-    let exe_dir = exe_dir()?;
+    let resolved = config::ensure_resolved_paths(&app)?;
 
     metadata::update_metadata(
-        &exe_dir,
+        &resolved.data_dir,
         &client,
         base_url,
         None,
@@ -136,7 +161,7 @@ pub async fn download_and_apply_update(
     let paths = update::prepare_paths(exe_name)?;
 
     // 读取镜像配置并转换 URL
-    let mirror_config = mirror::read_mirror_config(&exe_dir);
+    let mirror_config = mirror::read_mirror_config(&app);
     let actual_download_url = mirror_config.transform_url(&download_url);
 
     update::download_new_exe(&client, &actual_download_url, &paths.new_exe, |p| {

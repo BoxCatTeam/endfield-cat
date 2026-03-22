@@ -40,6 +40,7 @@ type GachaRecord = {
     seq_id: string;
     pulled_at: number;
     pool_type: string;
+    is_free: boolean;
     meta?: any;
 };
 
@@ -89,6 +90,7 @@ function getHistory(records: GachaRecord[], limit = 50, iconGetter?: IconGetter,
     const history: TopHistoryItem[] = [];
     let pity = 0;
     for (const rec of sorted) {
+        if (rec.is_free) continue;
         pity++;
         if (rec.rarity === 6) {
             const icon = iconGetter?.(rec);
@@ -104,20 +106,32 @@ function buildStats(records: GachaRecord[]) {
     let s6 = 0;
     let s5 = 0;
     let s4 = 0;
-    // 不统计三星/二星
+    let pityTotal = 0;
+    let pityS6 = 0;
+    // 免费抽不参与保底相关统计
     let pullsSinceLast6 = 0;
     let min6 = Infinity;
     let max6 = 0;
-    const total = records.length;
 
     let guarantee = 0;
     let foundFirst6 = false;
 
     // 记录按从新到旧遍历
     for (const rec of records) {
-        pullsSinceLast6 += 1;
         if (rec.rarity === 6) {
             s6 += 1;
+        } else if (rec.rarity === 5) {
+            s5 += 1;
+        } else if (rec.rarity === 4) {
+            s4 += 1;
+        }
+
+        if (rec.is_free) continue;
+
+        pityTotal += 1;
+        pullsSinceLast6 += 1;
+        if (rec.rarity === 6) {
+            pityS6 += 1;
 
             if (!foundFirst6) {
                 // 最新的首个六星
@@ -130,10 +144,6 @@ function buildStats(records: GachaRecord[]) {
             }
 
             pullsSinceLast6 = 0;
-        } else if (rec.rarity === 5) {
-            s5 += 1;
-        } else if (rec.rarity === 4) {
-            s4 += 1;
         }
         // 三星以下不计入
     }
@@ -149,7 +159,7 @@ function buildStats(records: GachaRecord[]) {
         max6 = Math.max(max6, lastCost);
     }
 
-    const avg6 = s6 > 0 ? Math.round(total / s6) : 0;
+    const avg6 = pityS6 > 0 ? Math.round(pityTotal / pityS6) : 0;
 
     return {
         stats: { s6, s5, s4, s3: 0 },
@@ -511,6 +521,7 @@ export const useGachaStore = defineStore("gacha", () => {
                 seq_id: p.seqId || "",
                 pulled_at: p.pulledAt,
                 pool_type: p.poolType || "",
+                is_free: p.isFree,
             }));
 
             const charSpecial: GachaRecord[] = [];

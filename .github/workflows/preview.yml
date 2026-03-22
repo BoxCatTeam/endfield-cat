@@ -120,6 +120,7 @@ jobs:
           releaseNotes: true
           tagName: ${{ needs.prepare.outputs.tag_name }}
           releaseName: EndCat ${{ needs.prepare.outputs.tag_name }}
+          generateReleaseNotes: true
 
       - name: Create portable exe (Windows)
         if: matrix.platform == 'windows-latest'

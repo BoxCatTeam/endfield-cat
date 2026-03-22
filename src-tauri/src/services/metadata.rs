@@ -127,8 +127,8 @@ fn count_files(dir: &Path) -> Result<usize, String> {
     Ok(count)
 }
 
-pub fn check_metadata_status(exe_dir: &Path) -> Result<MetadataStatus, String> {
-    let metadata_dir = exe_dir.join("data").join("metadata");
+pub fn check_metadata_status(data_dir: &Path) -> Result<MetadataStatus, String> {
+    let metadata_dir = data_dir.join("metadata");
 
     if !metadata_dir.exists() {
         fs::create_dir_all(&metadata_dir).map_err(|e| e.to_string())?;
@@ -223,7 +223,7 @@ fn cleanup_extra_files(metadata_dir: &Path, allowed: &HashSet<String>) {
 }
 
 async fn download_metadata<F>(
-    exe_dir: &Path,
+    data_dir: &Path,
     client: &reqwest::Client,
     base_url: Option<String>,
     version: Option<String>,
@@ -233,7 +233,7 @@ async fn download_metadata<F>(
 where
     F: FnMut(DownloadProgress),
 {
-    let metadata_dir = exe_dir.join("data").join("metadata");
+    let metadata_dir = data_dir.join("metadata");
 
     if clean_first && metadata_dir.exists() {
         fs::remove_dir_all(&metadata_dir).map_err(|e| e.to_string())?;
@@ -350,7 +350,7 @@ where
 }
 
 pub async fn reset_metadata<F>(
-    exe_dir: &Path,
+    data_dir: &Path,
     client: &reqwest::Client,
     base_url: Option<String>,
     version: Option<String>,
@@ -359,11 +359,11 @@ pub async fn reset_metadata<F>(
 where
     F: FnMut(DownloadProgress),
 {
-    download_metadata(exe_dir, client, base_url, version, true, on_progress).await
+    download_metadata(data_dir, client, base_url, version, true, on_progress).await
 }
 
 pub async fn update_metadata<F>(
-    exe_dir: &Path,
+    data_dir: &Path,
     client: &reqwest::Client,
     base_url: Option<String>,
     version: Option<String>,
@@ -372,7 +372,7 @@ pub async fn update_metadata<F>(
 where
     F: FnMut(UpdateProgress),
 {
-    let metadata_dir = exe_dir.join("data").join("metadata");
+    let metadata_dir = data_dir.join("metadata");
 
     if !metadata_dir.exists() {
         fs::create_dir_all(&metadata_dir).map_err(|e| e.to_string())?;

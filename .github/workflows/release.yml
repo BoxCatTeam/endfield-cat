@@ -131,6 +131,7 @@ jobs:
           releaseNotes: true
           tagName: ${{ needs.prepare.outputs.tag_name }}
           releaseName: EndCat ${{ needs.prepare.outputs.tag_name }}
+          generateReleaseNotes: true
           target: ${{ matrix.target }}
 
       - name: Create portable exe (Windows)

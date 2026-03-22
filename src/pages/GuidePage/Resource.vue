@@ -7,6 +7,8 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { useI18n } from 'vue-i18n'
 import type { MetadataSourceType } from '../../stores/app'
 import { fetchMetadataManifest, resetMetadata as resetMetadataCommand } from '../../api/tauriCommands'
+import SplitButtonSelect from '../../components/SplitButtonSelect.vue'
+import { useGithubMirror } from '../../composables/useGithubMirror'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -95,6 +97,20 @@ const selectSource = async (source: MetadataSourceType) => {
   appStore.metadataSourceType = source
   await testSourceConnection(source)
 }
+
+const TAURI_OK = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in (window as any)
+
+const {
+  githubMirrorConnectivity,
+  githubMirrorCustomTemplate,
+  githubMirrorEnabled,
+  githubMirrorSource,
+  githubMirrorSourceOptions,
+  selectGithubMirrorSource,
+  testGithubMirrorConnection,
+} = useGithubMirror({
+  canTest: () => TAURI_OK,
+})
 
 const checkMetadataState = async () => {
   checking.value = true
@@ -249,6 +265,69 @@ onUnmounted(() => {
               />
           </div>
         </transition>
+
+        <div class="section-label" style="margin-top: 20px;">{{ t('settings.githubMirror.title') }}</div>
+        <var-paper :elevation="false" radius="12" style="padding: 14px 16px;">
+          <var-space direction="column" :size="12">
+            <var-space justify="space-between" align="center">
+              <div>
+                <div class="source-name">{{ t('settings.githubMirror.enable') }}</div>
+                <div class="alert-desc">{{ t('settings.githubMirror.enableDesc') }}</div>
+              </div>
+              <var-switch v-model="githubMirrorEnabled" />
+            </var-space>
+
+            <var-space justify="space-between" align="center">
+              <div>
+                <div class="source-name">{{ t('settings.githubMirror.source') }}</div>
+                <div class="alert-desc">{{ t('settings.githubMirror.sourceDesc') }}</div>
+              </div>
+              <SplitButtonSelect
+                v-model="githubMirrorSource"
+                :options="githubMirrorSourceOptions"
+                :disabled="!githubMirrorEnabled"
+                @update:model-value="selectGithubMirrorSource"
+              />
+            </var-space>
+
+            <div v-if="githubMirrorEnabled && githubMirrorSource === 'custom'">
+              <div class="input-label">{{ t('settings.githubMirror.customUrl') }}</div>
+              <var-input
+                v-model="githubMirrorCustomTemplate"
+                size="small"
+                variant="outlined"
+                :placeholder="t('settings.githubMirror.customPlaceholder')"
+                @change="testGithubMirrorConnection"
+              />
+            </div>
+
+            <var-space justify="space-between" align="center">
+              <div class="source-status">
+                <span v-if="githubMirrorConnectivity.status === 'testing'" class="status-badge testing">
+                  <var-loading type="cube" size="small" :radius="2" class="inline-loading" />
+                </span>
+                <span v-else-if="githubMirrorConnectivity.status === 'success'" class="status-badge success">
+                  {{ githubMirrorConnectivity.latency }}ms
+                </span>
+                <span v-else-if="githubMirrorConnectivity.status === 'failed'" class="status-badge failed">
+                  [{{ t('guide.connectionFailed') }}]
+                </span>
+                <span v-else class="status-badge">--ms</span>
+              </div>
+
+              <var-button
+                round
+                text
+                size="mini"
+                type="primary"
+                :disabled="!githubMirrorEnabled || githubMirrorConnectivity.status === 'testing'"
+                @click="testGithubMirrorConnection"
+              >
+                <var-icon name="refresh" size="16" />
+              </var-button>
+            </var-space>
+          </var-space>
+        </var-paper>
       </div>
     </div>
 

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite, Row};
 // std::collections imported inline where needed
-use tauri::{State, AppHandle};
+use tauri::{AppHandle, State};
 
 macro_rules! log_dev {
     ($($arg:tt)*) => {
@@ -11,46 +11,21 @@ macro_rules! log_dev {
     };
 }
 
-use std::fs;
-
 pub type DbPool = Pool<Sqlite>;
 const CURRENT_DB_VERSION: i32 = 2; // 1: legacy (no version); 2: schema guard (pre-release; schema may evolve without bump)
 
 // Initialize the database pool
-pub async fn init_db(_app: &AppHandle) -> Result<DbPool, Box<dyn std::error::Error>> {
-    let mut exe_path = std::env::current_exe()?;
-    exe_path.pop(); // Remove executable name
-    
-    let db_dir = exe_path.join("data").join("database");
-    let config_dir = exe_path.join("data").join("config");
-    let old_user_data_dir = exe_path.join("userData");
-    
-    // Create new directories
-    if !db_dir.exists() {
-        fs::create_dir_all(&db_dir)?;
-    }
-    if !config_dir.exists() {
-        fs::create_dir_all(&config_dir)?;
-    }
-    
-    let db_path = db_dir.join("endcat.db");
-    
-    // Check migration from old location
-    if !db_path.exists() {
-        let old_db_path = old_user_data_dir.join("endcat.db");
-        if old_db_path.exists() {
-            log_dev!("[database] Migrating DB from {:?} to {:?}", old_db_path, db_path);
-            let _ = fs::rename(&old_db_path, &db_path);
-            // Optional: remove empty userData dir
-        }
-    }
+pub async fn init_db(app: &AppHandle) -> Result<DbPool, Box<dyn std::error::Error>> {
+    let resolved = crate::services::config::ensure_resolved_paths(app)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
-    let db_path_str = db_path.to_str().ok_or("Invalid db path")?;
-    
+    let db_path = resolved.database_path;
+    let db_path_str = db_path.to_string_lossy().to_string();
+
     log_dev!("[database] Opening DB at: {}", db_path_str);
-    
+
     let database_url = format!("sqlite:{}?mode=rwc", db_path_str);
-    
+
     let existed_before = db_path.exists();
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
@@ -241,6 +216,7 @@ pub struct GachaPull {
     pub pulled_at: i64,
     pub seq_id: Option<String>,
     pub pool_type: Option<String>,
+    pub is_free: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
@@ -254,6 +230,7 @@ struct GachaRow {
     pulled_at: i64,
     seq_id: Option<String>,
     pool_type: Option<String>,
+    is_free: bool,
 }
 
 #[tauri::command]
@@ -276,7 +253,7 @@ pub async fn db_list_gacha_pulls(
     limit: i64,
 ) -> Result<Vec<GachaPull>, String> {
     let rows = sqlx::query_as::<_, GachaRow>(
-        "SELECT uid, banner_id, banner_name, item_name, item_id, rarity, pulled_at, seq_id, pool_type 
+        "SELECT uid, banner_id, banner_name, item_name, item_id, rarity, pulled_at, seq_id, pool_type, is_free 
          FROM gacha_pulls 
          WHERE uid = ? 
          ORDER BY pulled_at DESC 
@@ -299,6 +276,7 @@ pub async fn db_list_gacha_pulls(
             pulled_at: r.pulled_at,
             seq_id: r.seq_id,
             pool_type: r.pool_type,
+            is_free: r.is_free,
         }
     }).collect();
 

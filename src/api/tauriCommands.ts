@@ -2,6 +2,13 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type HgProvider = "hypergryph" | "gryphline";
 
+export type StoragePaths = {
+  config: string;
+  dataDir: string;
+  database: string;
+  metadata: string;
+};
+
 export type FetchMetadataArgs = {
   baseUrl: string;
   version: string;
@@ -33,6 +40,14 @@ export function quitApp() {
 // 版本与元数据
 export function getAppVersion() {
   return invoke<string>("get_app_version");
+}
+
+export function getStoragePaths() {
+  return invoke<StoragePaths>("get_storage_paths");
+}
+
+export function openDataDir() {
+  return invoke("open_data_dir");
 }
 
 export function fetchLatestRelease<T = unknown>() {

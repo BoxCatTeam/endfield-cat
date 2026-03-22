@@ -87,6 +87,20 @@ export default {
         userData: "User Data",
         openUserData: "Open Data Directory",
         userDataDesc: "User data, metadata, and cache files are located here",
+        dataDir: {
+            title: "Data Directory",
+            desc: "Customize data directory (default: Documents/endcat). Restart required.",
+            dialogTitle: "Data Directory",
+            hint: "Leave empty to use the default directory: Documents/endcat. Restart the app to apply changes.",
+            placeholder: "e.g. D:\\\\EndCatData (leave empty for default)",
+            pick: "Choose Folder",
+            pickTitle: "Choose Data Directory",
+            reset: "Reset to default",
+            resetOk: "Reset to default data directory (takes effect after restart)",
+            restartHint: "Saved. Restart the app to apply.",
+            confirm: "Save",
+            cancel: "Cancel"
+        },
         update: {
             current: "Current Version",
             latest: "Latest Version",
@@ -156,6 +170,7 @@ export default {
         },
         messages: {
             openLinkFailed: "Failed to open link",
+            openDirFailed: "Failed to open directory",
             devPlaceholder: "Not available in development"
         },
         githubMirror: {

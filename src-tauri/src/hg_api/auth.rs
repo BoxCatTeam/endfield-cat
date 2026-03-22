@@ -183,7 +183,7 @@ pub async fn hg_exchange_user_token(token: String, provider: Option<String>) -> 
     let provider = normalize_provider(provider)?;
 
     let client = reqwest::Client::builder()
-        .user_agent("endfield-cat")
+        .user_agent("endcat")
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -287,7 +287,7 @@ pub async fn hg_u8_token_by_uid(uid: String, oauth_token: String, provider: Opti
     let provider = normalize_provider(provider)?;
 
     let client = reqwest::Client::builder()
-        .user_agent("endfield-cat")
+        .user_agent("endcat")
         .build()
         .map_err(|e| e.to_string())?;
 

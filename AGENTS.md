@@ -1,6 +1,6 @@
-# endfield-cat Agent Guide
+# endcat Agent Guide
 
-> 项目名称暂定为 `endfield-cat`，一个「明日方舟：终末地」工具箱。
+> 项目名称暂定为 `endcat`，一个「明日方舟：终末地」工具箱。
 
 ## 项目概览
 - 前端：Vite + Vue 3 + TypeScript（ESM）
@@ -18,12 +18,31 @@
 - Vite/Tauri 开发端口默认 `14200`（严格占用）；设置 `TAURI_DEV_HOST` 时 HMR 走 `14201`。
 - 适配范围：不考虑移动端兼容（以桌面端/PC 体验为准）。
 
+## 版本号约定（SemVer）
+- 使用 `MAJOR.MINOR.PATCH`（语义化版本）。
+- **三处版本号必须保持一致**：`package.json#version`、`src-tauri/tauri.conf.json#version`、`src-tauri/Cargo.toml#package.version`。
+- 升级规则：
+  - `MAJOR`：破坏性变更（不兼容配置/数据/行为，或需要用户手动处理）。
+  - `MINOR`：新增功能或对外行为变化（尽量向后兼容；默认路径/存储规则变化建议算 `MINOR`）。
+  - `PATCH`：纯修复/小优化，不改变对外行为。
+- 预发布：使用 `-beta.N` / `-rc.N`（例如 `0.3.0-beta.1`），正式版去掉后缀。
+
+## 分支与发布流程（dev/preview/master）
+- 分支含义：
+  - `dev`：日常开发分支
+  - `preview`：预发布分支（用于生成 prerelease）
+  - `master`：正式发布分支（用于生成 release draft）
+- CI/发布工作流（见 `.github/workflows/`）：
+  - `dev.yml`：推送到 `dev`/`preview`/`master` 时跑 `yarn build` + `cargo test`
+  - `preview.yml`：`dev` → `preview` 的 PR 合并后，自动 bump `-pre.*` 版本并发布 prerelease 资产
+  - `release.yml`：`preview` → `master` 的 PR 合并后，自动去掉预发布后缀并创建 draft release
+
 ## 依赖版本（来自 `package.json`）
-- `dependencies`：`vue@^3.5.13`、`vue-router@^4.6.4`、`pinia@^3.0.4`、`@varlet/ui@^3.13.1`、`@tauri-apps/api@^2`、`@tauri-apps/plugin-opener@^2`
+- `dependencies`：`vue@^3.5.13`、`vue-router@^4.6.4`、`pinia@^3.0.4`、`@varlet/ui@^3.13.1`、`@tauri-apps/api@^2`、`@tauri-apps/plugin-opener@^2`、`@tauri-apps/plugin-dialog@^2`、`@tauri-apps/plugin-sql@^2`
 - `devDependencies`：`vite@^6.0.3`、`@vitejs/plugin-vue@^5.2.1`、`typescript@~5.6.2`、`vue-tsc@^2.1.10`、`@tauri-apps/cli@^2`、`unplugin-auto-import@^21.0.0`、`unplugin-vue-components@^31.0.0`、`@varlet/import-resolver@^3.13.1`
 
 ## 环境要求
-- Node.js（建议 `>= 18`）
+- Node.js（与 `package.json#engines.node` 保持一致，当前为 `>= 24 < 25`）
 - Yarn v1（仓库包含 `yarn.lock`）
 - Tauri 开发/打包需要 Rust 工具链（`rustup` / `cargo`）
 
@@ -67,8 +86,11 @@
 - 标题栏独立于页面组件，置顶固定显示（路由切换仅更新标题内容）
 
 ## 数据存储
-- 寻访记录使用 SQLite（Tauri `sql` 插件），数据库文件：`sqlite:endcat.db`（路径相对 `AppConfig` 目录）
-- 账号信息（`uid` / `user_token` / `oauth_token` / `u8_token`）同样存储在 SQLite，用于多账号切换与后续同步
+- 寻访记录/账号信息使用 SQLite（后端 `sqlx` 直接读写 DB 文件）：`{dataDir}/database/endcat.db`
+- 数据目录 `dataDir` 可由用户配置（存储在 AppConfig 的 `config.json` 中的 `dataDir` 字段）
+- 若未配置 `dataDir`：优先使用便携目录 `exe_dir/data/`（若存在），否则使用 `Documents/endcat`
+- 元数据目录：`{dataDir}/metadata/`
+- 打开数据目录：前端通过后端命令打开（避免 opener 插件的 path scope 限制）
 
 ## 沉浸式标题栏（可选）
 - 方案：使用 Tauri 无边框窗口 + 前端自绘标题栏

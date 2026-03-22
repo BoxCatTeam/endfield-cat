@@ -13,6 +13,7 @@ export type GachaPull = {
   seqId?: string;
   itemId?: string;
   poolType?: string;
+  isFree: boolean;
 };
 
 export interface ApiGachaRecord {
