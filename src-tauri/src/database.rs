@@ -216,6 +216,7 @@ pub struct GachaPull {
     pub pulled_at: i64,
     pub seq_id: Option<String>,
     pub pool_type: Option<String>,
+    pub is_free: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
@@ -229,6 +230,7 @@ struct GachaRow {
     pulled_at: i64,
     seq_id: Option<String>,
     pool_type: Option<String>,
+    is_free: bool,
 }
 
 #[tauri::command]
@@ -251,7 +253,7 @@ pub async fn db_list_gacha_pulls(
     limit: i64,
 ) -> Result<Vec<GachaPull>, String> {
     let rows = sqlx::query_as::<_, GachaRow>(
-        "SELECT uid, banner_id, banner_name, item_name, item_id, rarity, pulled_at, seq_id, pool_type 
+        "SELECT uid, banner_id, banner_name, item_name, item_id, rarity, pulled_at, seq_id, pool_type, is_free 
          FROM gacha_pulls 
          WHERE uid = ? 
          ORDER BY pulled_at DESC 
@@ -274,6 +276,7 @@ pub async fn db_list_gacha_pulls(
             pulled_at: r.pulled_at,
             seq_id: r.seq_id,
             pool_type: r.pool_type,
+            is_free: r.is_free,
         }
     }).collect();
 
