@@ -1,6 +1,6 @@
 [package]
 name = "endcat"
-version = "0.3.1"
+version = "0.3.1-pre.69c03177.6c105aa"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"

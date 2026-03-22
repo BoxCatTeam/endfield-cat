@@ -1,7 +1,7 @@
 {
   "name": "endcat",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.3.1-pre.69c03177.6c105aa",
   "type": "module",
   "engines": {
     "node": ">=24 <25"
