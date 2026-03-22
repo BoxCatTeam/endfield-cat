@@ -40,15 +40,18 @@ fn legacy_config_path(exe_dir: &Path) -> PathBuf {
 fn legacy_db_paths(app: &AppHandle, exe_dir: &Path) -> Vec<PathBuf> {
     let mut paths = Vec::new();
 
-    // Prefer the unconfigured default (portable `exe_dir/data` first, then `Documents/endcat`).
+    // The first candidate is the current default location when `dataDir` is not configured.
+    // We still treat it as a migration source because an existing default DB may need to be
+    // copied into a newly configured custom directory on first launch after the change.
     if let Ok(default_dir) = default_data_dir(app) {
         paths.push(default_dir.join("database").join("endcat.db"));
     }
 
-    // Legacy portable paths (old versions).
+    // Legacy portable paths from older directory layouts.
     paths.push(exe_dir.join("data").join("database").join("endcat.db"));
     paths.push(exe_dir.join("userData").join("endcat.db"));
 
+    // Older builds also stored the database directly in the app config directory.
     if let Ok(dir) = app_config_dir(app) {
         paths.push(dir.join("endcat.db"));
     }

@@ -6,12 +6,12 @@ import { useI18n } from 'vue-i18n'
 import logo from '../assets/icon.webp'
 import { useAppStore } from '../stores/app'
 import { useUpdaterStore } from '../stores/updater'
-import type { MetadataSourceType, GithubMirrorSourceType } from '../stores/app'
-import { GITHUB_MIRROR_TEMPLATES } from '../stores/app'
-import { fetchMetadataManifest, getAppVersion, getStoragePaths, openDataDir as openDataDirCommand, resetMetadata as resetMetadataCommand, testGithubMirror } from '../api/tauriCommands'
+import type { MetadataSourceType } from '../stores/app'
+import { fetchMetadataManifest, getAppVersion, getStoragePaths, openDataDir as openDataDirCommand, resetMetadata as resetMetadataCommand } from '../api/tauriCommands'
 import type { StoragePaths } from '../api/tauriCommands'
 import { pickDirectory } from '../api/systemDialog'
 import SplitButtonSelect from '../components/SplitButtonSelect.vue'
+import { useGithubMirror } from '../composables/useGithubMirror'
 
 const { t, tm } = useI18n()
 const disclaimerItems = computed(() => tm('common.disclaimer.items') as string[])
@@ -250,82 +250,16 @@ const metadataSourceOptions = computed(() => [
   { label: t('settings.metadata.sourceCustom'), value: 'custom' },
 ])
 
-// GitHub 镜像相关
-const githubMirrorEnabled = computed({
-  get: () => appStore.githubMirrorEnabled,
-  set: (val) => appStore.githubMirrorEnabled = val
-})
-
-const githubMirrorSource = computed({
-  get: () => appStore.githubMirrorSource,
-  set: (val) => appStore.githubMirrorSource = val
-})
-
-const githubMirrorCustomTemplate = computed({
-  get: () => appStore.githubMirrorCustomTemplate,
-  set: (val) => appStore.githubMirrorCustomTemplate = val
-})
-
-const githubMirrorSourceOptions = computed(() => [
-  { label: t('settings.githubMirror.sources.gh-proxy-cf'), value: 'gh-proxy-cf' as const },
-  { label: t('settings.githubMirror.sources.gh-proxy-fastly'), value: 'gh-proxy-fastly' as const },
-  { label: t('settings.githubMirror.sources.gh-proxy-edgeone'), value: 'gh-proxy-edgeone' as const },
-  { label: t('settings.githubMirror.sources.ghfast'), value: 'ghfast' as const },
-  { label: t('settings.githubMirror.sources.custom'), value: 'custom' as const },
-])
-
-const githubMirrorConnectivity = ref<{ status: 'idle' | 'testing' | 'success' | 'failed'; latency: number; error: string }>({
-  status: 'idle',
-  latency: 0,
-  error: ''
-})
-
-const getGithubMirrorTemplate = () => {
-  if (githubMirrorSource.value === 'custom') {
-    return githubMirrorCustomTemplate.value || '{url}'
-  }
-  return GITHUB_MIRROR_TEMPLATES[githubMirrorSource.value]
-}
-
-const testGithubMirrorConnection = async () => {
-  const template = getGithubMirrorTemplate()
-  if (!template || template === '{url}') {
-    githubMirrorConnectivity.value = { status: 'idle', latency: 0, error: '' }
-    return
-  }
-
-  githubMirrorConnectivity.value = { status: 'testing', latency: 0, error: '' }
-  try {
-    const latency = await testGithubMirror(template)
-    githubMirrorConnectivity.value = { status: 'success', latency, error: '' }
-  } catch (e: any) {
-    console.error('GitHub mirror test failed:', e)
-    githubMirrorConnectivity.value = {
-      status: 'failed',
-      latency: 0,
-      error: typeof e === 'string' ? e : t('guide.connectionFailed')
-    }
-  }
-}
-
-const selectGithubMirrorSource = async (source: GithubMirrorSourceType) => {
-  githubMirrorSource.value = source
-  await testGithubMirrorConnection()
-}
-
-watch(githubMirrorEnabled, (enabled) => {
-  if (enabled) {
-    void testGithubMirrorConnection()
-  } else {
-    githubMirrorConnectivity.value = { status: 'idle', latency: 0, error: '' }
-  }
-})
-
-watch(githubMirrorCustomTemplate, () => {
-  if (githubMirrorSource.value === 'custom') {
-    githubMirrorConnectivity.value = { status: 'idle', latency: 0, error: '' }
-  }
-})
+const {
+  currentGithubMirrorLabel,
+  githubMirrorConnectivity,
+  githubMirrorCustomTemplate,
+  githubMirrorEnabled,
+  githubMirrorSource,
+  githubMirrorSourceOptions,
+  selectGithubMirrorSource,
+  testGithubMirrorConnection,
+} = useGithubMirror()
 
 
 
@@ -767,7 +701,7 @@ const notAvailable = () => {
                 <template #description>
                   <div class="metadata-conn">
                     <span class="metadata-conn-label" style="font-weight: 500;">
-                      {{ githubMirrorSourceOptions.find(o => o.value === githubMirrorSource)?.label }}
+                      {{ currentGithubMirrorLabel }}
                     </span>
                   </div>
                   <!-- 自定义输入框 -->
