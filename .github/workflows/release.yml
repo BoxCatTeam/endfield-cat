@@ -139,9 +139,14 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ needs.prepare.outputs.app_version }}"
+          $cargoToml = Get-Content -Raw "src-tauri/Cargo.toml"
+          if ($cargoToml -notmatch '(?m)^name\s*=\s*"([^"]+)"') {
+            throw "Failed to resolve package name from src-tauri/Cargo.toml"
+          }
+          $binName = $matches[1]
           $candidates = @(
-            "src-tauri/target/${{ matrix.target }}/release/endfield-cat.exe",
-            "src-tauri/target/release/endfield-cat.exe"
+            "src-tauri/target/${{ matrix.target }}/release/$binName.exe",
+            "src-tauri/target/release/$binName.exe"
           )
           $exe = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
           if (-not $exe) { throw "Missing binary for target ${{ matrix.target }}" }
@@ -149,7 +154,7 @@ jobs:
           $outDir = "src-tauri/target/release/bundle/portable"
           New-Item -ItemType Directory -Force -Path $outDir | Out-Null
           $suffix = if ("${{ matrix.target }}" -like "aarch64*") { "arm64" } else { "x64" }
-          $portableExe = Join-Path $outDir ("endfield-cat_{0}_{1}_portable.exe" -f $version, $suffix)
+          $portableExe = Join-Path $outDir ("{0}_{1}_{2}_portable.exe" -f $binName, $version, $suffix)
           Copy-Item -LiteralPath $exe -Destination $portableExe -Force
 
           "PORTABLE_EXE=$portableExe" >> $env:GITHUB_ENV
